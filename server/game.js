@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { newSnake, snakeReady, snakeTurn, advanceSnake } from './snake.js';
 
 export const SIZE = 15;
 export function winningLine(board, x, y, color) {
@@ -20,13 +21,16 @@ export class Games {
   list() { return [...this.rooms.values()]; }
   get(id) { return this.rooms.get(id); }
   roomFor(userId) { return [...this.rooms.values()].find((room) => room.players.some((p) => p.id === userId)); }
-  create(user) {
+  create(user, { game = 'gomoku', mode = 'versus' } = {}) {
+    if (!['gomoku', 'snake'].includes(game) || !['versus', 'coop'].includes(mode) || (game === 'gomoku' && mode !== 'versus')) throw new Error('无效的游戏或模式');
     if (this.roomFor(user.id)) throw new Error('请先离开当前房间');
     if (this.rooms.size >= 500) throw new Error('房间已满，请稍后再试');
     let id;
     do { id = randomBytes(4).toString('hex').toUpperCase(); } while (this.rooms.has(id));
     const room = { id, players: [{ ...user, color: 1 }], board: Array(SIZE * SIZE).fill(0), moves: [], status: 'waiting', turn: 1, winner: null, winLine: [], rematch: [], updatedAt: Date.now() };
     this.rooms.set(id, room);
+    room.game = game; room.mode = mode;
+    if (game === 'snake') { room.snake = newSnake(); delete room.board; delete room.moves; delete room.winLine; }
     return room;
   }
   join(user, id) {
@@ -45,6 +49,7 @@ export class Games {
   }
   move(userId, x, y) {
     const room = this.member(userId);
+    if (room.game === 'snake') throw new Error('该房间不是五子棋');
     if (room.status !== 'playing') throw new Error('当前不能落子');
     const player = room.players.find((p) => p.id === userId);
     if (player.color !== room.turn) throw new Error('请等待对手落子');
@@ -62,6 +67,7 @@ export class Games {
     const room = this.member(userId);
     if (room.status !== 'playing') throw new Error('当前没有进行中的对局');
     room.status = 'finished'; room.winner = 3 - room.players.find((p) => p.id === userId).color; room.reason = 'resign'; room.updatedAt = Date.now();
+    if (room.game === 'snake') { room.snake.phase = 'finished'; if (room.mode === 'coop') { room.winner = null; room.reason = 'team-abandon'; } }
     return room;
   }
   rematch(userId) {
@@ -69,6 +75,10 @@ export class Games {
     if (room.status !== 'finished' || room.players.length !== 2) throw new Error('等待双方到齐并完成本局');
     if (!room.rematch.includes(userId)) room.rematch.push(userId);
     if (room.rematch.length === 2) {
+      if (room.game === 'snake') {
+        Object.assign(room, { snake: newSnake(), status: 'playing', winner: null, reason: undefined, rematch: [], updatedAt: Date.now() });
+        return room;
+      }
       room.players.forEach((p) => { p.color = 3 - p.color; });
       Object.assign(room, { board: Array(SIZE * SIZE).fill(0), moves: [], status: 'playing', turn: 1, winner: null, winLine: [], rematch: [], reason: undefined });
     }
@@ -78,5 +88,16 @@ export class Games {
     const room = this.member(userId);
     // Leaving closes the table for both players; reconnecting does not count as leaving.
     this.rooms.delete(room.id); return room;
+  }
+  snakeRoom(userId) {
+    const room = this.member(userId);
+    if (room.game !== 'snake') throw new Error('该房间不是贪食蛇');
+    return room;
+  }
+  readySnake(userId, online) { return snakeReady(this.snakeRoom(userId), userId, online); }
+  turnSnake(userId, direction) { return snakeTurn(this.snakeRoom(userId), userId, direction); }
+  advance(id, now, online) {
+    const room = this.get(id);
+    return room?.game === 'snake' ? advanceSnake(room, now, online) : null;
   }
 }

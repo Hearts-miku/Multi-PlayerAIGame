@@ -113,15 +113,18 @@ export function redisBackend(url, prefix = 'tongzhuo:v1:') {
         const engine = new Games();
         let id, previous = '';
         if (operation !== 'create') {
-          id = operation === 'join' ? String(args[0]).trim().toUpperCase() : await redis.get(key(`member:${user.id}`));
+          id = operation === 'advance' ? args[0] : operation === 'join' ? String(args[0]).trim().toUpperCase() : await redis.get(key(`member:${user.id}`));
           if (!id) throw new Error('你尚未加入房间');
           previous = await redis.get(key(`room:${id}`));
-          if (!previous) throw new Error('房间不存在或已关闭');
+          if (!previous) { if (operation === 'advance') return null; throw new Error('房间不存在或已关闭'); }
           engine.rooms.set(id, JSON.parse(previous));
         }
-        const room = operation === 'create' ? engine.create(user)
+        const room = operation === 'create' ? engine.create(user, ...args)
           : operation === 'join' ? engine.join(user, id)
+          : operation === 'advance' ? engine.advance(...args)
           : engine[operation](user.id, ...args);
+        if (!room) return null;
+        if (operation === 'advance') user = { id: room.players[0].id };
         id = room.id; room.revision = (room.revision || 0) + 1;
         const members = [user.id, ...room.players.filter((p) => p.id !== user.id).map((p) => p.id)];
         const keys = [key(`room:${id}`), key('rooms'), ...members.map((member) => key(`member:${member}`))];
@@ -133,12 +136,15 @@ export function redisBackend(url, prefix = 'tongzhuo:v1:') {
       }
       throw new Error('棋局状态刚刚改变，请重试');
     },
-    create(user) { return this.change('create', user); },
+    create(user, options) { return this.change('create', user, [options]); },
     join(user, id) { return this.change('join', user, [id]); },
     move(id, x, y) { return this.change('move', { id }, [x, y]); },
     resign(id) { return this.change('resign', { id }); },
     rematch(id) { return this.change('rematch', { id }); },
     leave(id) { return this.change('leave', { id }); },
+    readySnake(id, online) { return this.change('readySnake', { id }, [online]); },
+    turnSnake(id, direction) { return this.change('turnSnake', { id }, [direction]); },
+    advance(id, now, online) { return this.change('advance', {}, [id, now, online]); },
   };
   return {
     kind: 'redis', store, games, get ready() { return ready(); },

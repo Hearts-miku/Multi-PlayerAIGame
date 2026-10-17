@@ -66,6 +66,15 @@ export function createApp({ databasePath = './data/game.sqlite', origins = ['htt
   ) });
   const snapshot = (room, online) => room && ({ ...room, players: room.players.map(({ id, displayName, color }) => ({ id, displayName, color, online: online.includes(String(id)) || online.includes(id) })) });
   let delivery = Promise.resolve(), closing = false;
+  let onlinePlayers = [];
+  const snakeRooms = new Map(), ticking = new Set();
+  function remember(room) {
+    if (room?.game !== 'snake') return;
+    const previous = snakeRooms.get(room.id);
+    if (previous && (previous.revision || 0) > (room.revision || 0)) return false;
+    snakeRooms.set(room.id, room);
+    return true;
+  }
   const broadcast = async (event) => {
     if (closing) return;
     if (event.type === 'revoke') {
@@ -73,18 +82,24 @@ export function createApp({ databasePath = './data/game.sqlite', origins = ['htt
       return;
     }
     if (event.type === 'closed') {
+      snakeRooms.delete(event.id);
       for (const id of event.players) if (!await games.roomFor(id)) io.to(`user:${id}`).emit('room:closed', '房间已关闭，可以开始新的对局');
     }
     if (io.sockets.sockets.size === 0) return;
-    const online = await backend.presence();
+    const online = event.frame ? onlinePlayers : await backend.presence();
+    onlinePlayers = online;
     if (event.type === 'room') {
-      const room = await games.get(event.id);
+      const room = event.room || await games.get(event.id);
+      if (remember(room) === false) return;
       if (room) for (const player of room.players) io.to(`user:${player.id}`).emit('room:update', snapshot(room, online));
     }
     if (event.lobby) {
       const rooms = await games.list();
-      io.emit('lobby:update', { online: online.length, rooms: rooms.map((r) => ({ id: r.id, host: r.players[0].displayName, count: r.players.length, status: r.status })) });
-      if (event.type === 'presence') for (const room of rooms) for (const player of room.players) io.to(`user:${player.id}`).emit('room:update', snapshot(room, online));
+      io.emit('lobby:update', { online: online.length, rooms: rooms.map((r) => ({ id: r.id, host: r.players[0].displayName, count: r.players.length, status: r.status, game: r.game || 'gomoku', mode: r.mode || 'versus' })) });
+      if (event.type === 'presence') for (const room of rooms) {
+        if (remember(room) === false) continue;
+        for (const player of room.players) io.to(`user:${player.id}`).emit('room:update', snapshot(room, online));
+      }
     }
   };
   const unsubscribe = backend.listen((event) => {
@@ -106,8 +121,10 @@ export function createApp({ databasePath = './data/game.sqlite', origins = ['htt
     let queue = Promise.resolve();
     const initialized = (async () => {
       const online = await backend.presence([[socket.id, user.id]]);
+      onlinePlayers = online;
       if (!socket.connected) { await backend.presence([], [socket.id]); return; }
-      socket.emit('room:update', snapshot(await games.roomFor(user.id), online) || null);
+      const room = await games.roomFor(user.id); remember(room);
+      socket.emit('room:update', snapshot(room, online) || null);
       await backend.publish({ type: 'presence', lobby: true });
     })();
     initialized.catch(() => socket.disconnect(true));
@@ -118,8 +135,10 @@ export function createApp({ databasePath = './data/game.sqlite', origins = ['htt
           if (!await store.authenticate(socket.data.token)) { socket.emit('session:expired'); socket.disconnect(true); return; }
           if (!await backend.limit(`action:${user.id}`, 20, 1000)) throw new Error('操作太快了，请稍后重试');
           const room = await fn(payload || {});
+          remember(room);
+          if (name === 'snake:turn') { if (typeof ack === 'function') ack({ ok: true }); return; }
           if (name === 'room:leave') await backend.publish({ type: 'closed', id: room.id, players: room.players.map((p) => p.id), lobby: true });
-          else await backend.publish({ type: 'room', id: room.id, lobby: name !== 'game:move' || room.status === 'finished' });
+          else await backend.publish({ type: 'room', id: room.id, ...(room.game === 'snake' ? { room } : {}), lobby: name !== 'game:move' || room.status === 'finished' });
           if (typeof ack === 'function') ack({ ok: true, room: name === 'room:leave' ? null : snapshot(room, await backend.presence()) });
         } catch (error) {
           const message = /[\u3400-\u9fff]/.test(error.message) ? error.message : '服务暂时不可用，请稍后重试';
@@ -127,16 +146,44 @@ export function createApp({ databasePath = './data/game.sqlite', origins = ['htt
         }
       }).catch(() => console.error('Realtime operation failed'));
     });
-    action('room:create', () => games.create(user));
+    action('room:create', ({ game, mode }) => games.create(user, { game, mode }));
     action('room:join', ({ id }) => games.join(user, id));
     action('game:move', ({ x, y }) => games.move(user.id, x, y));
     action('game:resign', () => games.resign(user.id));
     action('game:rematch', () => games.rematch(user.id));
     action('room:leave', () => games.leave(user.id));
+    action('snake:ready', async () => games.readySnake(user.id, await backend.presence()));
+    action('snake:turn', ({ direction }) => games.turnSnake(user.id, direction));
     socket.on('disconnect', () => {
       if (!closing) backend.presence([], [socket.id]).then(() => backend.publish({ type: 'presence', lobby: true })).catch(() => console.error('Presence update failed'));
     });
   });
+  // Timers only advance rooms with a participant connected to this instance.
+  // Redis compares the entire prior snapshot, so concurrent instances can
+  // commit each due frame at most once. No client can submit a tick or board.
+  const snakeTimer = setInterval(() => {
+    if (closing) return;
+    const localUsers = new Set([...io.sockets.sockets.values()].map((s) => s.data.user.id));
+    for (const [id, cached] of snakeRooms) {
+      if (!cached.players.some((p) => localUsers.has(p.id))) { snakeRooms.delete(id); continue; }
+      if (cached.status !== 'playing' || cached.snake.phase !== 'running' || ticking.has(id)) continue;
+      if (Date.now() < cached.snake.nextTick && cached.players.every((p) => onlinePlayers.includes(p.id))) continue;
+      ticking.add(id);
+      (async () => {
+        const room = await games.advance(id, Date.now(), onlinePlayers);
+        if (closing) return;
+        if (room) {
+          remember(room);
+          await backend.publish({ type: 'room', id, room, frame: true, lobby: room.status === 'finished' });
+        } else {
+          const latest = await games.get(id);
+          if (latest) remember(latest); else snakeRooms.delete(id);
+        }
+      })().catch(() => { snakeRooms.delete(id); console.error('Snake synchronization failed'); })
+        .finally(() => ticking.delete(id));
+    }
+  }, 100);
+  snakeTimer.unref();
   let maintaining = false;
   const maintenance = setInterval(async () => {
     if (closing || maintaining || !io.sockets.sockets.size) return;
@@ -160,7 +207,7 @@ export function createApp({ databasePath = './data/game.sqlite', origins = ['htt
     res.status(error.status || 500).json({ error: error.status === 400 ? '请求格式不正确' : '服务暂时不可用，请稍后重试' });
   });
   return { app, httpServer, io, games, store, backend, close: async () => {
-    closing = true; clearInterval(maintenance); unsubscribe();
+    closing = true; clearInterval(maintenance); clearInterval(snakeTimer); unsubscribe();
     const ids = [...io.sockets.sockets.keys()];
     await new Promise((done) => io.close(done));
     await delivery;
