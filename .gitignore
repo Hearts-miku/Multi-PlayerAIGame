@@ -9,3 +9,6 @@ test-results/
 *.log
 .DS_Store
 .cache/
+.vercel/
+.agents/
+skills-lock.json

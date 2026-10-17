@@ -4,17 +4,17 @@
 
 ## 已实现
 
-- 账号注册、登录、退出；昵称展示；SQLite 持久化账号与会话。
+- 账号注册、登录、退出；昵称展示；本地默认 SQLite，Vercel 使用 Redis 持久化账号、会话与棋局。
 - scrypt 加盐密码哈希；随机会话令牌仅通过 HttpOnly / SameSite=Strict Cookie 传递，数据库只保存令牌摘要。
 - 登录和注册限流、来源检查、请求体大小限制；Socket.IO 握手及每次操作验证会话，退出时断开对应会话的连接。
 - 登录玩家大厅、在线人数、创建房间、房间码/邀请链接加入、同账号多页同步。
 - 15×15 实时五子棋：黑棋先手、服务器验证轮次/坐标/占位/成员身份、四方向五连与长连获胜、满盘和棋。
-- 认输、双方同意后交换黑白再战、刷新和网络重连恢复棋局。
+- 认输、双方同意后交换黑白再战、刷新和网络重连恢复棋局。Redis 模式支持多实例原子落子、共享在线状态和跨实例退出撤销。
 - 响应式大厅与棋盘；胜利连线和最后落子标记。
 
 ## 本地启动
 
-需要 **Node.js 24+**，使用其内置 `node:sqlite`。该模块在部分 Node.js 24 版本中仍会显示实验性提示。
+需要 **Node.js 24.x**，使用其内置 `node:sqlite`。该模块在部分 Node.js 24 版本中仍会显示实验性提示。
 
 ```bash
 npm ci
@@ -44,10 +44,33 @@ npm start
 | `APP_ORIGIN` | `http://localhost:3000,http://localhost:5173` | 逗号分隔的准确浏览器来源，不带路径或末尾斜线 |
 | `COOKIE_SECURE` | `false` | HTTPS 部署时设为 `true` |
 | `TRUST_PROXY` | `0` | 仅在恰好一个受信反向代理之后设为 `1` |
+| `REDIS_URL` | 未设置 | 设置 `rediss://` 连接后启用共享持久存储 |
+| `REDIS_PREFIX` | `tongzhuo:v1:` | Redis 键命名空间；Vercel Preview 默认使用独立的 `tongzhuo:preview:v1:` |
 
 局域网联机时，向 `APP_ORIGIN` 加入实际访问地址，例如 `http://192.168.1.10:3000`，重启后通过该地址访问，并确保防火墙允许相应端口。localhost 邀请链接只能在本机使用；请用朋友能访问的地址打开页面后复制邀请。
 
 ## 部署
+
+### Vercel
+
+前端由 Vite 构建到 `dist`，`api/server.js` 导出 HTTP/WebSocket 服务。`vercel.json` 开启 Fluid Compute，HTTP API 重写到该函数；Socket.IO 直接连接 `/api/server`，关闭自动追加斜线。默认东京区域，函数最大执行时间 300 秒；客户端在连接中断后自动重连并重新读取 Redis 中的棋局。Redis 连接在收到请求时初始化，避免预热期间连接超时永久阻断后续请求。
+
+部署必须配置 `REDIS_URL` 和 HTTPS `APP_ORIGIN`。Vercel 运行时强制启用 Secure Cookie，禁止回退到临时 SQLite。当前已连接 Vercel Marketplace 的 Upstash Redis Free 计划，关闭 `autoUpgrade`、`eviction` 和 `prodPack`；达到免费额度后可能暂时无法操作，不自动升级付费。免费额度以控制台为准。
+
+在线地址：[https://www.hearts-ai.top](https://www.hearts-ai.top)。项目在个人空间内名为 `multi-playeraigame`，根域名 `hearts-ai.top` 保留跳转到 `www`。首次安装数据库需要账号所有者接受供应商条款。生产与预览的 Redis 前缀不同；本地云端测试使用随机测试前缀，测试结束后仅清理该前缀。
+
+```bash
+vercel link
+vercel env pull .env.local
+npm run test:redis
+vercel deploy --prod --skip-domain
+# 验证账号、真实双人对局、重连与退出后再发布：
+vercel promote <deployment-url>
+```
+
+开发模式不会自动读取 `.env.local` 中的云端凭据，避免普通本地测试访问生产数据。`test:redis` 会明确读取该文件并使用独立命名空间。
+
+### Docker / 常驻服务器
 
 仓库提供 Dockerfile。应用需要常驻 Node.js 服务和 WebSocket 支持，不能直接部署到 GitHub Pages。
 
@@ -81,7 +104,9 @@ $env:PLAYWRIGHT_CHANNEL = 'msedge'
 npm run test:browser
 ```
 
-`npm test` 包括规则单元测试，以及使用真实 HTTP 和 Socket.IO 连接的账号、权限、完整胜局、重连、再战、退出撤销和数据库重开测试。浏览器测试使用桌面与手机尺寸的两个独立会话，验证注册、大厅、九手胜局、刷新恢复、再战和退出，截图输出到忽略的 `test-results/`。CI 执行这些测试和生产构建。
+验证已部署的网站时设置 `LIVE_BASE_URL=https://www.hearts-ai.top` 再运行浏览器测试。测试会创建随机账号和临时棋桌，完成后关闭棋桌并退出；随机测试账号会保留。受保护的候选部署可使用环境中的 `VERCEL_AUTOMATION_BYPASS_SECRET`，仅向目标站点发送，不写入代码或报告。
+
+`npm test` 包括规则单元测试，以及使用真实 HTTP 和 Socket.IO 连接的账号、权限、完整胜局、重连、再战、退出撤销和数据库重开测试。浏览器测试使用桌面与手机尺寸的两个独立会话，验证注册、大厅、九手胜局、刷新恢复、再战和退出，截图输出到忽略的 `test-results/`。CI 执行这些测试和生产构建。`npm run test:redis` 另外验证真实 Redis 上两个独立服务实例的对战、并发互斥、服务重启恢复和跨实例会话撤销；没有配置 Redis 时普通测试明确跳过该项。
 
 ## 项目结构
 
@@ -105,10 +130,10 @@ tests/
 ## 首版边界
 
 - 房间对所有登录玩家可见，首版没有私密房、观战、聊天、AI 对手或匹配排位。
-- 棋局在单进程内存中保存，**服务器重启会清空棋局**，账号和未过期会话仍保留。双方离线且一小时未操作的房间会定期清理；没有落子倒计时。
+- 本地 SQLite 模式的棋局仍在内存中，服务重启会清空。Redis 模式下账号、会话和棋局跨服务重启保留；房间连续 24 小时无操作后过期，登录会话 7 天过期；没有落子倒计时。
 - 离开房间会关闭双方棋桌。断线或退出登录不会立即关闭棋局，同账号重新登录可恢复。
-- 当前用于单实例运行；多实例部署前需共享房间状态、事件适配器和限流存储。
+- Redis 模式共享房间、限流、在线状态及消息通知。落子采用原子比较并交换；订阅短暂中断后，客户端重连或周期同步会重新加载权威棋局。
 - 不含邮箱验证、找回密码和账号管理后台；请妥善保存账号密码。
-- GitHub 代码发布与公网游戏部署是两个独立步骤，本项目未预置任何服务器或域名。
+- `.env*`、`.vercel`、数据库、缓存和 CLI 登录信息不提交至 Git，也不上传部署源码。
 
 参考官方文档：[Socket.IO 中间件](https://socket.io/docs/v4/middlewares/)、[Node.js SQLite](https://nodejs.org/docs/latest-v24.x/api/sqlite.html)。

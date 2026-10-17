@@ -21,7 +21,7 @@ test('real HTTP and Socket.IO: auth, isolation, game, reconnect, logout revocati
     return { status: res.status, cookie: res.headers.get('set-cookie'), data: await res.json() };
   }
   async function connect(cookie, allowed = true) {
-    const socket = io(base, { autoConnect: false, reconnection: false, transports: ['websocket'], extraHeaders: { Cookie: cookie, Origin: origin } }); sockets.push(socket);
+    const socket = io(base, { autoConnect: false, path: '/api/server', addTrailingSlash: false, reconnection: false, transports: ['websocket'], extraHeaders: { Cookie: cookie, Origin: origin } }); sockets.push(socket);
     const ready = once(socket, allowed ? 'connect' : 'connect_error'); socket.connect(); await ready; return socket;
   }
   const emit = (s, name, payload = {}) => s.timeout(3000).emitWithAck(name, payload);
@@ -51,7 +51,7 @@ test('real HTTP and Socket.IO: auth, isolation, game, reconnect, logout revocati
   }
   assert.equal(final.room.winner, 1); assert.equal(final.room.moves.length, 9);
   sa.disconnect();
-  const reconnected = io(base, { autoConnect: false, reconnection: false, extraHeaders: { Cookie: cookieA, Origin: origin }, transports: ['websocket'] }); sockets.push(reconnected);
+  const reconnected = io(base, { autoConnect: false, path: '/api/server', addTrailingSlash: false, reconnection: false, extraHeaders: { Cookie: cookieA, Origin: origin }, transports: ['websocket'] }); sockets.push(reconnected);
   const restored = once(reconnected, 'room:update'); reconnected.connect(); assert.equal((await restored).moves.length, 9);
   await emit(reconnected, 'game:rematch'); const rematch = await emit(sb, 'game:rematch'); assert.equal(rematch.room.status, 'playing'); assert.equal(rematch.room.players[0].color, 2);
   const expired = once(reconnected, 'session:expired'); assert.equal((await request('logout', {}, cookieA)).status, 200); await expired;

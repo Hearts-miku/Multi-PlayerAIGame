@@ -17,6 +17,8 @@ export function winningLine(board, x, y, color) {
 
 export class Games {
   rooms = new Map();
+  list() { return [...this.rooms.values()]; }
+  get(id) { return this.rooms.get(id); }
   roomFor(userId) { return [...this.rooms.values()].find((room) => room.players.some((p) => p.id === userId)); }
   create(user) {
     if (this.roomFor(user.id)) throw new Error('请先离开当前房间');

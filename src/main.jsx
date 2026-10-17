@@ -49,7 +49,7 @@ function App() {
   useEffect(() => { api('me').then((data) => setUser(data.user)).catch(() => {}).finally(() => setLoading(false)); }, []);
   useEffect(() => {
     if (!user) return;
-    const socket = io({ autoConnect: false }); socketRef.current = socket;
+    const socket = io({ autoConnect: false, path: '/api/server', addTrailingSlash: false, transports: ['websocket'] }); socketRef.current = socket;
     socket.on('connect', () => { setConnected(true); setNotice(''); });
     socket.on('disconnect', () => setConnected(false));
     socket.on('connect_error', (e) => setNotice(`连接失败：${e.message}。正在尝试重新连接…`));
@@ -63,7 +63,7 @@ function App() {
     if (pending || !connected) return;
     setPending(true); setNotice('');
     try {
-      const response = await socketRef.current.timeout(5000).emitWithAck(event, payload);
+      const response = await socketRef.current.timeout(15000).emitWithAck(event, payload);
       if (!response.ok) throw new Error(response.error);
     } catch (e) { setNotice(e.message === 'operation has timed out' ? '操作超时，请检查连接后重试' : e.message); } finally { setPending(false); }
   }

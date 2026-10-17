@@ -5,7 +5,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const derive = promisify(scrypt);
-const digest = (value) => createHash('sha256').update(value).digest('hex');
+export const digest = (value) => createHash('sha256').update(value).digest('hex');
 export const COOKIE = 'table_session';
 export const SESSION_AGE = 7 * 24 * 60 * 60 * 1000;
 
