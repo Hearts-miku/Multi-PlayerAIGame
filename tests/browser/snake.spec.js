@@ -22,7 +22,13 @@ for (const mode of ['versus', 'coop']) test(`snake ${mode}: desktop + mobile con
     }
     await a.getByRole('button', { name: mode === 'coop' ? /双人合作/ : /双人对战/ }).click();
     const code = await a.locator('.room-code-box strong').innerText();
-    await b.getByLabel('房间码', { exact: true }).fill(code); await b.getByRole('button', { name: /加入房间/ }).click();
+    if (mode === 'coop') {
+      await b.locator('.room-list article').filter({ hasText: code }).getByRole('button', { name: /加入房间/ }).click();
+    } else {
+      await b.goto(`/?room=${code}`);
+      await expect(b.getByLabel('房间码', { exact: true })).toHaveValue(code);
+      await b.getByRole('complementary', { name: '加入房间' }).getByRole('button', { name: /加入房间/ }).click();
+    }
     await expect(b.getByTestId('snake-board')).toHaveAttribute('data-phase', 'ready');
     await a.getByRole('button', { name: '准备开始', exact: true }).click();
     await b.getByRole('button', { name: '准备开始', exact: true }).click();

@@ -8,7 +8,7 @@ export function SnakeCard({ disabled, onCreate }) {
   return <section className="snake-card">
     <div className="snake-card-copy"><span className="tag">反应与默契 <span>·</span> 2 人同屏</span>
       <h2>贪食蛇 <span>SNAKE DUO</span></h2><p>各走各的精彩，或一起吃掉整片果园。<br/>叫上朋友，来一场指尖上的追逐。</p>
-      <div className="snake-mode-buttons"><button className="primary" disabled={disabled} onClick={() => onCreate('versus')}>双人对战 <span>↗</span></button><button className="secondary" disabled={disabled} onClick={() => onCreate('coop')}>双人合作 <span>＋</span></button></div>
+      <div className="snake-mode-buttons"><button className="primary" disabled={disabled} onClick={() => onCreate('versus')}>创建双人对战 <span>↗</span></button><button className="secondary" disabled={disabled} onClick={() => onCreate('coop')}>创建双人合作 <span>＋</span></button></div>
       <small>方向键 / WASD · 手机方向按钮 · 双方准备后开始</small>
     </div>
     <svg className="snake-art" viewBox="0 0 360 210" aria-hidden="true">

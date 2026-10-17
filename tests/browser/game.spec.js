@@ -24,7 +24,7 @@ test('two browser players register, play, reconnect, rematch, and log out', asyn
     await a.screenshot({ path: info.outputPath('desktop-lobby.png'), fullPage: true });
     await a.getByRole('button', { name: /创建房间/ }).click();
     const code = await a.locator('.room-code-box strong').innerText();
-    await b.getByLabel('房间码', { exact: true }).fill(code); await b.getByRole('button', { name: /加入房间/ }).click();
+    await b.getByLabel('房间码', { exact: true }).fill(code); await b.getByRole('complementary', { name: '加入房间' }).getByRole('button', { name: /加入房间/ }).click();
     await expect(a.getByRole('heading', { name: '轮到你落子了' })).toBeVisible();
     for (const column of ['A', 'B', 'C', 'D', 'E']) {
       await a.getByRole('button', { name: `${column}1 空位`, exact: true }).click();
