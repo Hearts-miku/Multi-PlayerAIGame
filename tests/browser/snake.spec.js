@@ -18,9 +18,17 @@ for (const mode of ['versus', 'coop']) test(`snake ${mode}: desktop + mobile con
       await page.getByLabel('账号', { exact: true }).fill(`${username}_${suffix}`);
       await page.getByLabel('怎么称呼你').fill(name); await page.getByLabel('密码', { exact: true }).fill(randomUUID());
       await page.getByRole('button', { name: '创建账号，开始玩' }).click();
-      await expect(page.getByRole('button', { name: /双人合作/ })).toBeEnabled();
+      await expect(page.getByRole('button', { name: /创建房间/ })).toBeEnabled();
     }
-    await a.getByRole('button', { name: mode === 'coop' ? /双人合作/ : /双人对战/ }).click();
+    await a.getByRole('radio', { name: '贪食蛇', exact: true }).check();
+    await a.getByRole('radio', { name: '双人合作', exact: true }).check();
+    await a.getByRole('radio', { name: '五子棋', exact: true }).check();
+    await expect(a.getByRole('radio', { name: '双人合作', exact: true })).toHaveCount(0);
+    await expect(a.getByRole('radio', { name: '双人对战', exact: true })).toBeChecked();
+    await a.getByRole('radio', { name: '贪食蛇', exact: true }).check();
+    await a.getByRole('radio', { name: mode === 'coop' ? '双人合作' : '双人对战', exact: true }).check();
+    await expect(a.locator('.room-code-box')).toHaveCount(0);
+    await a.getByRole('button', { name: /创建房间/ }).click();
     const code = await a.locator('.room-code-box strong').innerText();
     if (mode === 'coop') {
       await b.locator('.room-list article').filter({ hasText: code }).getByRole('button', { name: /加入房间/ }).click();
@@ -62,7 +70,7 @@ for (const mode of ['versus', 'coop']) test(`snake ${mode}: desktop + mobile con
     await expect(a.getByTestId('snake-board')).toHaveAttribute('data-phase', 'ready');
     await expect(b.getByTestId('snake-board')).toHaveAttribute('data-tick', '0');
     a.once('dialog', (dialog) => dialog.accept()); await a.getByRole('button', { name: '离开房间', exact: true }).click();
-    await expect(b.getByRole('button', { name: /双人合作/ })).toBeEnabled();
+    await expect(b.getByRole('button', { name: /创建房间/ })).toBeEnabled();
     for (const page of [a, b]) { await page.getByRole('button', { name: '退出', exact: true }).click(); await expect(page.getByRole('heading', { name: '欢迎回到同桌' })).toBeVisible(); }
     expect(errors).toEqual([]);
   } finally { for (const context of contexts) await context.close(); }
