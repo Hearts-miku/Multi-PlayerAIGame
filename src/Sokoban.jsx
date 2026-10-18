@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import GameCardSelect from './GameCardSelect.jsx';
 import './sokoban.css';
+import { SOKOBAN_LEVELS } from '../shared/sokoban-levels.js';
+import { gateOpen, plateActive, circuitOpen } from '../shared/sokoban-mechanics.js';
 
 const keys = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
 const colors = ['#ffbf79', '#80d7ef'];
@@ -9,7 +11,7 @@ const same = (a, b) => a[0] === b[0] && a[1] === b[1];
 export function SokobanCard({ selected, disabled, onSelect }) {
   return <section className={`sokoban-card selectable-game ${selected ? 'selected-game' : ''}`}>
     <GameCardSelect name="默契搬运队" selected={selected} disabled={disabled} onSelect={onSelect}/>
-    <div className="sokoban-card-copy"><span className="tag">合作解谜 · 2 人闯关</span><h2>默契搬运队<span>BETTER TOGETHER</span></h2><p>你来开门，我来搬运。<br/>把箱子送回家，把默契练出来。</p><div className="sokoban-card-facts">3 个关卡 · 机关门 · 双人推箱子</div><small>方向键 / WASD / 触屏 · 不计时，慢慢商量</small></div>
+    <div className="sokoban-card-copy"><span className="tag">合作解谜 · 2 人闯关</span><h2>默契搬运队<span>BETTER TOGETHER</span></h2><p>你来开门，我来搬运。<br/>把箱子送回家，把默契练出来。</p><div className="sokoban-card-facts">{SOKOBAN_LEVELS.length} 个关卡 · 合作机关 · 双人推箱子</div><small>方向键 / WASD / 触屏 · 不计时，慢慢商量</small></div>
     <svg viewBox="0 0 320 200" className="sokoban-card-art" aria-hidden="true"><rect width="320" height="200" rx="18" fill="#152126"/>
       {[0,1,2,3,4].map((i) => <path key={i} d={`M0 ${i*40}H320M${i*64} 0V200`} stroke="#ffffff08"/>)}
       <path d="M95 145V65H225" stroke="#b9ef7166" strokeWidth="4" strokeDasharray="6 7" fill="none"/>
@@ -44,7 +46,7 @@ export default function SokobanMatch({ room, user, connected, pending, action, i
     };
     window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler);
   }, [controllable]);
-  const open = s.plates.some((plate) => s.actors.some((p) => same(p, plate)));
+  const open = s.gates.length > 0 && s.gates.every((p) => gateOpen(s, p));
   const delivered = s.boxes.filter((box, i) => same(box, s.goals[i])).length;
   const title = room.status === 'waiting' ? '等队友，一起开工' : room.status === 'finished' ? room.reason === 'sokoban-complete' ? '默契满分，全部通关！' : '本次挑战已结束' : s.phase === 'cleared' ? '本关完成！' : !bothOnline ? '等队友回来，进度已保留' : s.name;
   return <div className="play-layout sokoban-layout">
@@ -56,11 +58,19 @@ export default function SokobanMatch({ room, user, connected, pending, action, i
         {s.walls.map(([x,y]) => <g key={`${x},${y}`}><rect x={x*40+2} y={y*40+2} width="36" height="36" rx="5" fill="#425257"/><path d={`M${x*40+7} ${y*40+13}h26m-13 0v19`} stroke="#53666b" strokeWidth="2"/></g>)}
         {s.goals.map(([x,y],i) => <g key={i}><circle cx={x*40+20} cy={y*40+20} r="13" fill="none" stroke={colors[i]} strokeWidth="2" strokeDasharray="4 3"/><text x={x*40+20} y={y*40+25} textAnchor="middle" fill={colors[i]} fontSize="13">{i+1}</text></g>)}
         {s.plates.map(([x,y]) => <g key={`${x},${y}`}><rect x={x*40+7} y={y*40+7} width="26" height="26" rx="5" fill={s.actors.some((p)=>same(p,[x,y])) ? '#b9ef71' : '#53683b'} stroke="#b9ef71"/><text x={x*40+20} y={y*40+25} textAnchor="middle" fontSize="17" fill="#182519">⚡</text></g>)}
-        {s.gates.map(([x,y]) => <rect key={`${x},${y}`} x={x*40+4} y={y*40+4} width="32" height="32" rx="3" fill={open ? '#b9ef7110' : '#7c925d'} stroke="#b9ef71" strokeWidth="3" strokeDasharray={open ? '3 5' : undefined}/>)}
+        {(s.circuits || []).flatMap((c) => c.plates.map((plate,i) => {
+          const [x,y]=plate.at, active=plateActive(s,plate), color=colors[plate.owner] || '#b9ef71';
+          return <g key={`${c.id}-${i}`} data-testid={`sokoban-plate-${c.id}-${i}`} data-active={active}><rect x={x*40+6} y={y*40+6} width="28" height="28" rx={plate.accept === 'box' ? 2 : 9} fill={active ? color : '#293c35'} stroke={color} strokeWidth="2"/><text x={x*40+20} y={y*40+25} textAnchor="middle" fill={active ? '#15231a' : color} fontSize="15" fontWeight="bold">{c.id}</text></g>;
+        }))}
+        {s.gates.map(([x,y]) => {
+          const isOpen=gateOpen(s,[x,y]), circuit=s.circuits?.find((c)=>c.gates.some((p)=>same(p,[x,y])));
+          return <g key={`${x},${y}`} data-testid={`sokoban-gate-${x}-${y}`} data-open={isOpen}><rect x={x*40+4} y={y*40+4} width="32" height="32" rx="3" fill={isOpen ? '#b9ef7110' : '#7c925d'} stroke="#b9ef71" strokeWidth="3" strokeDasharray={isOpen ? '3 5' : undefined}/><text x={x*40+20} y={y*40+25} textAnchor="middle" fontSize="15" fill={isOpen ? '#b9ef71' : '#17261a'}>{circuit?.id}</text></g>;
+        })}
         {s.boxes.map(([x,y],i) => <g key={i} data-testid={`sokoban-box-${i}`} data-x={x} data-y={y}><rect x={x*40+5} y={y*40+5} width="30" height="30" rx="5" fill={colors[i]}/><path d={`M${x*40+11} ${y*40+11}l18 18m0-18l-18 18`} stroke="#172b31" opacity=".45" strokeWidth="3"/>{same([x,y],s.goals[i]) && <text x={x*40+20} y={y*40+25} textAnchor="middle" fontSize="19" fill="#163321">✓</text>}</g>)}
         {s.actors.map(([x,y],i) => <g key={i} data-testid={`sokoban-player-${i}`} data-x={x} data-y={y}><circle cx={x*40+20} cy={y*40+20} r="14" fill={colors[i]} stroke={i===index ? '#ffffff' : '#142025'} strokeWidth="3"/><text x={x*40+20} y={y*40+25} textAnchor="middle" fontSize="15" fontWeight="bold" fill="#183039">{i+1}</text></g>)}
       </svg>
       <div className="sokoban-controls"><div><strong style={{ color: colors[index] }}>你是 {index + 1} 号 · {index === 0 ? '橙色' : '蓝色'}</strong><p>方向键 / WASD / 方向按钮<br/>圆形是玩家，方形是箱子</p></div><div className="sokoban-pad" role="group" aria-label="搬运队方向控制">{[['up','↑','向上'],['left','←','向左'],['down','↓','向下'],['right','→','向右']].map(([direction,arrow,label]) => <button key={direction} className={`sokoban-${direction}`} aria-label={label} disabled={!controllable} onClick={() => command('move',direction)}>{arrow}</button>)}</div></div>
+      {s.circuits?.length > 0 && <div className="sokoban-circuits" aria-label="合作机关状态">{s.circuits.map((c) => <div key={c.id} data-testid={`sokoban-circuit-${c.id}`} data-open={circuitOpen(s,c)}><b>{c.id}</b><span>{c.label}<small>{c.plates.map((p)=>plateActive(s,p) ? '●' : '○').join(' ')} · {(s.latches || []).includes(c.id) ? '已永久解锁' : circuitOpen(s,c) ? '通路已打开' : '等待配合'}</small></span></div>)}</div>}
       <p className="sokoban-hint">✦ {s.hint}</p>
     </section>
     <aside className="match-panel sokoban-panel"><span className="eyebrow">TWO HANDS, ONE PLAN</span><h2 aria-live="polite">{title}</h2><p>{!connected ? '连接恢复后继续，关卡和步数会保留。' : room.status === 'waiting' ? '把房间码发给队友，两人到齐即可开始。' : '把各自的箱子送到同色圆点，两只箱子都归位才算过关。'}</p>
@@ -72,9 +82,9 @@ export default function SokobanMatch({ room, user, connected, pending, action, i
         <button className="secondary full" disabled={!available || s.votes.restart.includes(user.id)} onClick={() => command('restart')}>{s.votes.restart.includes(user.id) ? '已申请重开，等队友…' : s.votes.restart.length ? '同意重开本关' : '申请重开本关'}</button>
         <small>双方确认才重开或换关；继续移动会取消待确认请求。</small>
       </div>}
-      {room.status === 'finished' && <button className="primary full" disabled={!connected || pending || room.rematch.includes(user.id)} onClick={() => action('game:rematch')}>{room.rematch.includes(user.id) ? '已准备，等队友…' : room.rematch.length ? '接受重新挑战' : '重新挑战三关'}</button>}
+      {room.status === 'finished' && <button className="primary full" disabled={!connected || pending || room.rematch.includes(user.id)} onClick={() => action('game:rematch')}>{room.rematch.includes(user.id) ? '已准备，等队友…' : room.rematch.length ? '接受重新挑战' : '重新挑战全部关卡'}</button>}
       <button className="text-button leave-button" disabled={!connected || pending} onClick={() => { if (confirm('离开会关闭双方的房间，确定吗？')) action('room:leave'); }}>离开房间</button>
-      <div className="rules"><h4>合作小贴士</h4><p>只能推自己的箱子，不能拉、不能一次推两个，也不能穿过队友。箱子推到死角时，撤销最后一步或双方重开。</p><p>站在绿色机关上，门就会打开。门中有人或箱子时，踩机关的人要等他们通过再离开。</p><p>不计时、不抢回合。队友离线时暂停操作，重新登录即可继续。</p></div>
+      <div className="rules"><h4>合作小贴士</h4><p>只能推自己的箱子，不能拉、不能一次推两个，也不能穿过队友。箱子推到死角时，撤销最后一步或双方重开。</p><p>站在绿色机关上，门就会打开。门中有人或箱子时，踩机关的人要等他们通过再离开。</p><p>带字母的机关只控制同字母门：同组机关要全部激活。边框颜色对应玩家或箱子；方形底座仅认箱子。双人锁需两人同时到位，解锁后不必继续踩住。</p></div>
     </aside>
   </div>;
 }

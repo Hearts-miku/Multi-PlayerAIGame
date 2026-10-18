@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Games } from '../server/game.js';
 import { gateOpen, newSokoban } from '../server/sokoban.js';
+import { plateActive } from '../shared/sokoban-mechanics.js';
+import { SOKOBAN_LEVELS } from '../shared/sokoban-levels.js';
+import { campaignSolution } from './helpers/sokoban-solution.js';
 
 const user = (id) => ({ id, displayName: `p${id}` });
 function setup() {
@@ -24,8 +27,9 @@ function setup() {
   };
   return { games, room, act, walk };
 }
-test('all three cooperative levels have legal solutions, shared consent and full replay', () => {
+test('legacy three-level campaigns retain their rules, consent and completion; replay upgrades to eight', () => {
   const {games,room,act,walk}=setup();
+  room.sokoban.totalLevels=3;delete room.sokoban.latches;
   for(const id of [1,2]) {act(id,'move','up');act(id,'move','up');}
   assert.equal(room.sokoban.phase,'cleared'); act(1,'next'); assert.equal(room.sokoban.level,0); act(2,'next');
   act(2,'move','right');
@@ -40,6 +44,49 @@ test('all three cooperative levels have legal solutions, shared consent and full
   walk(2,9,4);for(let i=0;i<6;i++) act(2,'move','left');walk(2,2,3);act(2,'move','down');
   assert.equal(room.status,'finished');assert.equal(room.reason,'sokoban-complete');assert.deepEqual(room.sokoban.boxes,room.sokoban.goals);
   games.rematch(1);games.rematch(2);assert.equal(room.sokoban.level,0);assert.equal(room.status,'playing');
+  assert.equal(room.sokoban.totalLevels,8);
+});
+
+test('all eight levels are solvable through ordinary multiplayer moves and shared consent', () => {
+  assert.equal(SOKOBAN_LEVELS.length,8);
+  const {steps,room}=campaignSolution();
+  assert.equal(steps.filter(s=>s.kind==='next').length,14);
+  for(let level=0;level<8;level++) {
+    const moves=steps.filter(s=>s.level===level&&s.kind==='move');
+    assert.deepEqual([...new Set(moves.map(s=>s.player))].sort(),[1,2]);
+    assert.equal(moves.at(-1).phase,'cleared');
+  }
+  assert.equal(room.reason,'sokoban-complete');assert.deepEqual(room.sokoban.boxes,room.sokoban.goals);
+  const a=newSokoban(7),b=newSokoban(7);a.circuits[0].plates[0].at[0]=99;assert.equal(b.circuits[0].plates[0].at[0],2);
+});
+
+test('colored circuits are independent; weight plates require the correct box and all inputs', () => {
+  const {room,act}=setup();room.sokoban=newSokoban(3);
+  assert.equal(gateOpen(room.sokoban,[5,2]),false);act(2,'move','right');
+  assert.equal(gateOpen(room.sokoban,[5,2]),true);assert.equal(gateOpen(room.sokoban,[5,6]),false);
+  for(let i=0;i<3;i++)act(1,'move','right');
+  assert.throws(()=>act(2,'move','left'),/门内/);
+  const plate=room.sokoban.circuits[0].plates[0];
+  assert.equal(plateActive({...room.sokoban,actors:[[2,4],[1,4]]},plate),false);
+  room.sokoban=newSokoban(6);
+  act(1,'move','up');assert.equal(gateOpen(room.sokoban,[5,3]),false);
+  act(2,'move','up');assert.equal(gateOpen(room.sokoban,[5,3]),true);
+  act(2,'undo');assert.equal(gateOpen(room.sokoban,[5,3]),false);
+  assert.equal(plateActive({...room.sokoban,actors:[[2,2],[3,4]],boxes:[[2,3],[3,3]]},room.sokoban.circuits[0].plates[0]),false);
+  const relay=newSokoban(7), relayPlate=relay.circuits[1].plates[0];
+  assert.equal(plateActive({...relay,actors:[[2,4],[7,2]]},relayPlate),true);
+  assert.equal(plateActive({...relay,boxes:[[2,3],[7,2]]},relayPlate),true);
+  assert.equal(plateActive({...relay,actors:[[7,2],[3,4]]},relayPlate),false);
+});
+
+test('dual latch requires both players at once, persists when leaving, and undo/restart restores it', () => {
+  const {room,act,walk}=setup();room.sokoban=newSokoban(5);
+  walk(1,2,2);assert.deepEqual(room.sokoban.latches,[]);
+  walk(2,3,5);act(2,'move','down');assert.deepEqual(room.sokoban.latches,['A']);
+  act(2,'undo');assert.deepEqual(room.sokoban.latches,[]);assert.equal(gateOpen(room.sokoban,[5,4]),false);
+  act(2,'move','down');act(1,'move','left');assert.equal(gateOpen(room.sokoban,[5,4]),true);
+  act(1,'restart');act(2,'restart');assert.deepEqual(room.sokoban.latches,[]);
+  assert.equal(room.sokoban.level,5);assert.equal(room.sokoban.moves,0);
 });
 test('puzzle validates ownership, revisions, offline moves, undo and consent without changing old games', () => {
   const {games,room,act}=setup();

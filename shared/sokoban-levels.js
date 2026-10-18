@@ -1,0 +1,43 @@
+const border = (width, height) => Array.from({ length: width * height }, (_, i) => [i % width, Math.floor(i / width)]).filter(([x, y]) => x === 0 || y === 0 || x === width - 1 || y === height - 1);
+const divider = (x, openings) => Array.from({ length: 7 }, (_, i) => [x, i + 1]).filter(([, y]) => !openings.includes(y));
+export const SOKOBAN_LEVELS = [
+  { name: '各司其职', hint: '每人只能推动自己颜色的箱子。绕到箱子后方，把它送到同色圆点。', width: 9, height: 7,
+    walls: [...border(9, 7), [4, 2], [4, 3], [4, 4]], gates: [], plates: [],
+    actors: [[2, 4], [6, 4]], boxes: [[2, 3], [6, 3]], goals: [[2, 1], [6, 1]] },
+  { name: '为你开门', hint: '蓝色先踩左上机关，橙色运箱过门；橙色回来接班，让蓝色把箱子送回左侧。', width: 9, height: 7,
+    walls: [...border(9, 7), [4, 1], [4, 2], [4, 4], [4, 5]], gates: [[4, 3]], plates: [[2, 1]],
+    actors: [[1, 3], [1, 1]], boxes: [[2, 3], [6, 4]], goals: [[5, 2], [2, 3]] },
+  { name: '默契接力', hint: '任一机关都能开门。先把橙箱送到右上，再接力把蓝箱送到左下。', width: 11, height: 9,
+    walls: [...border(11, 9), [5, 1], [5, 2], [5, 3], [5, 5], [5, 6], [5, 7], [2, 6], [3, 6], [7, 2], [8, 2], [3, 2]],
+    gates: [[5, 4]], plates: [[2, 2], [8, 6]], actors: [[2, 4], [1, 2]], boxes: [[3, 4], [8, 4]], goals: [[8, 3], [2, 5]] },
+  { name: '双向门禁', hint: '蓝色站上 A，让橙箱穿过上门；橙色到右侧站上 B，接蓝色从下门运箱回来。', width: 11, height: 9,
+    walls: [...border(11, 9), ...divider(5, [2, 6])], gates: [[5, 2], [5, 6]], plates: [],
+    actors: [[2, 2], [1, 4]], boxes: [[3, 2], [8, 5]], goals: [[8, 2], [2, 6]],
+    circuits: [
+      { id: 'A', label: '上门 · 蓝色玩家踩住', gates: [[5, 2]], plates: [{ at: [2, 4], owner: 1 }] },
+      { id: 'B', label: '下门 · 橙色玩家踩住', gates: [[5, 6]], plates: [{ at: [8, 3], owner: 0 }] },
+    ] },
+  { name: '箱子当班', hint: '橙箱先替大家压住 A，蓝色把箱子运回左侧后，橙色再取回箱子归位。玩家踩上去不算哦。', width: 11, height: 9,
+    walls: [...border(11, 9), ...divider(5, [4])], gates: [[5, 4]], plates: [],
+    actors: [[2, 4], [1, 4]], boxes: [[2, 3], [8, 4]], goals: [[3, 2], [2, 5]],
+    circuits: [{ id: 'A', label: '承重门 · 橙箱压住', gates: [[5, 4]], plates: [{ at: [2, 2], owner: 0, accept: 'box' }] }] },
+  { name: '双人密钥', hint: '两人先分别站上同色 A 机关，门会永久解锁；再商量让路，把两个箱子交换到对岸。', width: 11, height: 9,
+    walls: [...border(11, 9), ...divider(5, [4])], gates: [[5, 4]], plates: [],
+    actors: [[2, 4], [3, 4]], boxes: [[3, 3], [8, 4]], goals: [[8, 3], [2, 5]],
+    circuits: [{ id: 'A', mode: 'latch', label: '双人锁 · 两人同时到位后常开', gates: [[5, 4]], plates: [{ at: [2, 2], owner: 0 }, { at: [3, 6], owner: 1 }] }] },
+  { name: '先修归途', hint: '两只箱子同时压住 A 才能去对岸。先一起解锁 B 的返程门，再回来取箱，走下路完成运输。', width: 11, height: 9,
+    walls: [...border(11, 9), ...divider(5, [3, 6])], gates: [[5, 3], [5, 6]], plates: [],
+    actors: [[2, 4], [3, 4]], boxes: [[2, 3], [3, 3]], goals: [[8, 3], [8, 5]],
+    circuits: [
+      { id: 'A', label: '双重承重 · 两只箱子同时压住', gates: [[5, 3]], plates: [{ at: [2, 2], owner: 0, accept: 'box' }, { at: [3, 2], owner: 1, accept: 'box' }] },
+      { id: 'B', mode: 'latch', label: '返程锁 · 两人同时到位后常开', gates: [[5, 6]], plates: [{ at: [7, 2], owner: 0 }, { at: [8, 6], owner: 1 }] },
+    ] },
+  { name: '终极接力', hint: '橙箱守 A，蓝色进中庭，用蓝箱接替自己守 B；两人到最右侧解锁 C，再沿下路接回两个箱子。', width: 15, height: 9,
+    walls: [...border(15, 9), ...divider(5, [4, 6]), ...divider(9, [4, 6])], gates: [[5, 4], [9, 4], [5, 6], [9, 6]], plates: [],
+    actors: [[2, 4], [3, 4]], boxes: [[2, 3], [7, 3]], goals: [[12, 3], [12, 5]],
+    circuits: [
+      { id: 'A', label: '入口门 · 橙箱压住', gates: [[5, 4]], plates: [{ at: [2, 2], owner: 0, accept: 'box' }] },
+      { id: 'B', label: '接力门 · 蓝色玩家或蓝箱压住', gates: [[9, 4]], plates: [{ at: [7, 2], owner: 1, accept: 'either' }] },
+      { id: 'C', mode: 'latch', label: '双重返程锁 · 两人同时到位后常开', gates: [[5, 6], [9, 6]], plates: [{ at: [11, 2], owner: 0 }, { at: [12, 6], owner: 1 }] },
+    ] },
+];

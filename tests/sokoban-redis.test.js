@@ -6,6 +6,7 @@ import { io } from 'socket.io-client';
 import { redisBackend } from '../server/redis-backend.js';
 import { createApp, SOCKET_PATH } from '../server/app.js';
 import { COOKIE } from '../server/store.js';
+import { newSokoban } from '../server/sokoban.js';
 
 function state(socket, predicate) {
   return new Promise((resolve, reject) => {
@@ -43,10 +44,19 @@ test('Redis puzzle: authenticated cross-instance moves, atomic races and restart
     const online=users.map(u=>u.id);
     const results=await Promise.allSettled([first.games.sokobanAction(users[1].id,next,online),second.games.sokobanAction(users[1].id,next,online)]);
     assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
-    const saved=await first.games.get(id); assert.equal(saved.sokoban.moves,before.sokoban.moves+1);
+    let saved=await first.games.get(id); assert.equal(saved.sokoban.moves,before.sokoban.moves+1);
+    // Seed only this random test namespace near the new two-player latch.
+    saved.sokoban=newSokoban(5);saved.sokoban.actors=[[2,2],[3,5]];saved.revision++;
+    await admin.set(`${prefix}room:${id}`,JSON.stringify(saved),'KEEPTTL');
+    const unlocked=state(a,r=>r?.sokoban?.latches?.includes('A'));
+    assert.equal((await emit(b,'sokoban:action',{kind:'move',direction:'down',round:0,revision:0})).ok,true);
+    assert.deepEqual((await unlocked).sokoban.latches,['A']);
+    saved=await first.games.get(id);
     await Promise.all(apps.map(app=>app.close()));
     replacement=redisBackend(process.env.REDIS_URL,prefix);await replacement.ready;
     assert.deepEqual((await replacement.games.get(id)).sokoban,saved.sokoban);
+    await replacement.games.sokobanAction(users[1].id,{kind:'undo',round:0,revision:1},online);
+    assert.deepEqual((await replacement.games.get(id)).sokoban.latches,[]);
     await assert.rejects(()=>replacement.games.sokobanAction(users[0].id,{...command,revision:2},[users[0].id]),/上线/);
     await replacement.games.leave(users[0].id);
   } finally {
