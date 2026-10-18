@@ -69,6 +69,11 @@ export class Games {
     // Leaving closes the table for both players; reconnecting does not count as leaving.
     this.rooms.delete(room.id); return room;
   }
+  sokobanAction(userId, command, online) {
+    const room = this.member(userId);
+    if (room.game !== 'sokoban') throw new Error('该房间不是默契搬运队');
+    return this.rulesFor(room).action(room, userId, command, online);
+  }
   snakeRoom(userId) {
     const room = this.member(userId);
     if (room.game !== 'snake') throw new Error('该房间不是贪食蛇');

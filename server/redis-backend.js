@@ -142,6 +142,7 @@ export function redisBackend(url, prefix = 'tongzhuo:v1:') {
     resign(id) { return this.change('resign', { id }); },
     rematch(id) { return this.change('rematch', { id }); },
     leave(id) { return this.change('leave', { id }); },
+    sokobanAction(id, command, online) { return this.change('sokobanAction', { id }, [command, online]); },
     readySnake(id, online) { return this.change('readySnake', { id }, [online]); },
     turnSnake(id, direction) { return this.change('turnSnake', { id }, [direction]); },
     advance(id, now, online) { return this.change('advance', {}, [id, now, online]); },

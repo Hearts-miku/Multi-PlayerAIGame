@@ -138,7 +138,7 @@ export function createApp({ databasePath = './data/game.sqlite', origins = ['htt
           remember(room);
           if (name === 'snake:turn') { if (typeof ack === 'function') ack({ ok: true }); return; }
           if (name === 'room:leave') await backend.publish({ type: 'closed', id: room.id, players: room.players.map((p) => p.id), lobby: true });
-          else await backend.publish({ type: 'room', id: room.id, ...(room.game === 'snake' ? { room } : {}), lobby: name !== 'game:move' || room.status === 'finished' });
+          else await backend.publish({ type: 'room', id: room.id, ...(room.game === 'snake' ? { room } : {}), lobby: (name !== 'game:move' && name !== 'sokoban:action') || room.status === 'finished' });
           if (typeof ack === 'function') ack({ ok: true, room: name === 'room:leave' ? null : snapshot(room, await backend.presence()) });
         } catch (error) {
           const message = /[\u3400-\u9fff]/.test(error.message) ? error.message : '服务暂时不可用，请稍后重试';
@@ -152,6 +152,7 @@ export function createApp({ databasePath = './data/game.sqlite', origins = ['htt
     action('game:resign', () => games.resign(user.id));
     action('game:rematch', () => games.rematch(user.id));
     action('room:leave', () => games.leave(user.id));
+    action('sokoban:action', async (command) => games.sokobanAction(user.id, command, await backend.presence()));
     action('snake:ready', async () => games.readySnake(user.id, await backend.presence()));
     action('snake:turn', ({ direction }) => games.turnSnake(user.id, direction));
     socket.on('disconnect', () => {
