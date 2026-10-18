@@ -18,26 +18,29 @@ for (const mode of ['versus', 'coop']) test(`snake ${mode}: desktop + mobile con
       await page.getByLabel('账号', { exact: true }).fill(`${username}_${suffix}`);
       await page.getByLabel('怎么称呼你').fill(name); await page.getByLabel('密码', { exact: true }).fill(randomUUID());
       await page.getByRole('button', { name: '创建账号，开始玩' }).click();
-      await expect(page.getByRole('button', { name: /创建房间/ })).toBeEnabled();
+      await expect(page.getByRole('button', { name: '选择贪食蛇', exact: true })).toBeEnabled();
     }
+    await expect(a.getByRole('radio', { name: '贪食蛇', exact: true })).toHaveCount(0);
     await a.getByRole('button', { name: '选择贪食蛇', exact: true }).click();
-    await expect(a.getByRole('radio', { name: '贪食蛇', exact: true })).toBeChecked();
+    await expect(a.getByRole('dialog', { name: '贪食蛇 · 创建房间' })).toBeVisible();
     await a.getByRole('radio', { name: '双人合作', exact: true }).check();
+    await a.keyboard.press('Escape');
+    await expect(a.getByRole('dialog')).not.toBeVisible();
+    await expect(a.getByRole('button', { name: '选择贪食蛇', exact: true })).toBeFocused();
     await a.getByRole('button', { name: '选择五子棋', exact: true }).focus();
     await a.keyboard.press('Enter');
-    await expect(a.getByRole('button', { name: '选择五子棋', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(a.getByRole('dialog', { name: '五子棋 · 创建房间' })).toBeVisible();
     await expect(a.getByRole('radio', { name: '双人合作', exact: true })).toHaveCount(0);
-    await expect(a.getByRole('radio', { name: '双人对战', exact: true })).toBeChecked();
-    await a.getByRole('radio', { name: '贪食蛇', exact: true }).check();
-    await a.getByRole('radio', { name: mode === 'coop' ? '双人合作' : '双人对战', exact: true }).check();
-    await expect(a.getByRole('button', { name: '选择贪食蛇', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await a.getByRole('button', { name: '取消', exact: true }).click();
     await a.getByRole('button', { name: '选择贪食蛇', exact: true }).click();
-    await expect(a.getByRole('radio', { name: mode === 'coop' ? '双人合作' : '双人对战', exact: true })).toBeChecked();
+    await a.getByRole('radio', { name: mode === 'coop' ? '双人合作' : '双人对战', exact: true }).check();
     await b.getByRole('button', { name: '选择贪食蛇', exact: true }).click();
-    await expect(b.getByRole('radio', { name: '贪食蛇', exact: true })).toBeChecked();
+    await expect(b.getByRole('dialog')).toBeInViewport();
     await expect(b.getByRole('radio', { name: '双人对战', exact: true })).toBeInViewport();
+    await b.screenshot({ path: info.outputPath('mobile-create-dialog.png'), fullPage: true });
+    await b.getByRole('button', { name: '关闭创建房间', exact: true }).click();
     await expect(a.locator('.room-code-box')).toHaveCount(0);
-    await a.getByRole('button', { name: /创建房间/ }).click();
+    await a.getByRole('button', { name: /^创建房间/ }).click();
     const code = await a.locator('.room-code-box strong').innerText();
     if (mode === 'coop') {
       await b.locator('.room-list article').filter({ hasText: code }).getByRole('button', { name: /加入房间/ }).click();
@@ -79,7 +82,7 @@ for (const mode of ['versus', 'coop']) test(`snake ${mode}: desktop + mobile con
     await expect(a.getByTestId('snake-board')).toHaveAttribute('data-phase', 'ready');
     await expect(b.getByTestId('snake-board')).toHaveAttribute('data-tick', '0');
     a.once('dialog', (dialog) => dialog.accept()); await a.getByRole('button', { name: '离开房间', exact: true }).click();
-    await expect(b.getByRole('button', { name: /创建房间/ })).toBeEnabled();
+    await expect(b.getByRole('button', { name: '选择贪食蛇', exact: true })).toBeEnabled();
     for (const page of [a, b]) { await page.getByRole('button', { name: '退出', exact: true }).click(); await expect(page.getByRole('heading', { name: '欢迎回到同桌' })).toBeVisible(); }
     expect(errors).toEqual([]);
   } finally { for (const context of contexts) await context.close(); }
