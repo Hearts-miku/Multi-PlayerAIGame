@@ -1,4 +1,4 @@
-import { newSokoban, sokobanAction } from './sokoban.js';
+import { newSokoban, createSokoban, sokobanAction } from './sokoban.js';
 import { GAME_CATALOG } from '../shared/games.js';
 import { newGomoku, moveGomoku, resetGomoku } from './gomoku.js';
 import { newSnake, snakeReady, snakeTurn, advanceSnake } from './snake.js';
@@ -21,7 +21,7 @@ const resign = (room, userId) => {
 export const GAME_RULES = extendRules({}, {
   gomoku: { modes: Object.keys(GAME_CATALOG.gomoku.modes), initial: newGomoku, reset: resetGomoku, resign, move: moveGomoku },
   sokoban: {
-    modes: Object.keys(GAME_CATALOG.sokoban.modes), initial: () => ({ sokoban: newSokoban() }),
+    modes: Object.keys(GAME_CATALOG.sokoban.modes), initial: createSokoban,
     reset: (room) => { room.sokoban = newSokoban(0, room.sokoban.round + 1, room.sokoban.revision + 1); },
     resign: (room) => { room.winner = null; room.reason = 'team-abandon'; }, action: sokobanAction,
   },

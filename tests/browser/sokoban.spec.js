@@ -49,6 +49,24 @@ test('cooperative puzzle: desktop/mobile moves, undo, consent, progression and r
     await a.screenshot({path:info.outputPath('sokoban-desktop.png'),fullPage:true});await b.screenshot({path:info.outputPath('sokoban-mobile.png'),fullPage:true});
     expect(await b.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     a.once('dialog',d=>d.accept());await a.getByRole('button',{name:'离开房间',exact:true}).click();
-    await expect(b.getByRole('button',{name:'选择默契搬运队',exact:true})).toBeEnabled();expect(errors).toEqual([]);
+    await expect(b.getByRole('button',{name:'选择默契搬运队',exact:true})).toBeEnabled();
+    await b.getByRole('button',{name:'选择默契搬运队',exact:true}).click();
+    await expect(b.getByLabel('起始关卡',{exact:true})).toHaveValue('0');
+    await b.getByLabel('起始关卡',{exact:true}).selectOption('7');
+    await expect(b.getByLabel('起始关卡',{exact:true})).toBeInViewport();
+    await b.screenshot({path:info.outputPath('mobile-level-picker.png'),fullPage:true});
+    await b.getByRole('button',{name:/^创建房间/}).click();
+    const selectedCode=await b.locator('.room-code-box strong').innerText();
+    await a.getByLabel('房间码',{exact:true}).fill(selectedCode);
+    await a.getByRole('complementary',{name:'加入房间'}).getByRole('button',{name:/加入房间/}).click();
+    for(const p of [a,b])await expect(p.getByTestId('sokoban-board')).toHaveAttribute('data-level','7');
+    await move(b);
+    await a.reload();await expect(a.getByTestId('sokoban-board')).toHaveAttribute('data-level','7');
+    await expect(a.getByTestId('sokoban-board')).toHaveAttribute('data-moves','1');
+    a.once('dialog',d=>d.accept());await a.getByRole('button',{name:'离开房间',exact:true}).click();
+    await expect(b.getByRole('button',{name:'选择默契搬运队',exact:true})).toBeEnabled();
+    await b.getByRole('button',{name:'选择五子棋',exact:true}).click();
+    await expect(b.getByLabel('起始关卡',{exact:true})).toHaveCount(0);
+    await b.getByRole('button',{name:'取消',exact:true}).click();expect(errors).toEqual([]);
   } finally {for(const c of contexts) await c.close();}
 });

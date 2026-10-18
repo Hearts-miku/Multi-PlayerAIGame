@@ -7,6 +7,19 @@ import { SOKOBAN_LEVELS } from '../shared/sokoban-levels.js';
 import { campaignSolution } from './helpers/sokoban-solution.js';
 
 const user = (id) => ({ id, displayName: `p${id}` });
+test('room creation accepts every start level, defaults to first, and rejects invalid input atomically', () => {
+  const games=new Games();
+  for(let level=0;level<8;level++) {
+    const room=games.create(user(level+10),{game:'sokoban',mode:'coop',startLevel:level});
+    assert.deepEqual(room.sokoban,newSokoban(level));assert.equal(room.status,'waiting');
+  }
+  const saved=structuredClone(games.list());
+  for(const startLevel of [-1,8,1.5,'7',null,{},NaN]) assert.throws(()=>games.create(user(99),{game:'sokoban',mode:'coop',startLevel}),/起始关卡/);
+  assert.deepEqual(games.list(),saved);
+  assert.equal(games.create(user(99),{game:'sokoban',mode:'coop'}).sokoban.level,0);
+  assert.equal(games.create(user(100),{game:'gomoku',startLevel:7}).sokoban,undefined);
+  assert.equal(games.create(user(101),{game:'snake',mode:'coop',startLevel:7}).sokoban,undefined);
+});
 function setup() {
   const games = new Games(); const room = games.create(user(1), { game: 'sokoban', mode: 'coop' }); games.join(user(2), room.id);
   const act = (id, kind, direction) => games.sokobanAction(id, { kind, direction, round: room.sokoban.round, revision: room.sokoban.revision }, [1, 2]);

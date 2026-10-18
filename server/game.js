@@ -14,7 +14,7 @@ export class Games {
   list() { return [...this.rooms.values()]; }
   get(id) { return this.rooms.get(id); }
   roomFor(userId) { return [...this.rooms.values()].find((room) => room.players.some((p) => p.id === userId)); }
-  create(user, { game = 'gomoku', mode = 'versus' } = {}) {
+  create(user, { game = 'gomoku', mode = 'versus', startLevel } = {}) {
     const definition = this.rules[game];
     if (!definition?.modes.includes(mode)) throw new Error('无效的游戏或模式');
     if (this.roomFor(user.id)) throw new Error('请先离开当前房间');
@@ -22,7 +22,7 @@ export class Games {
     let id;
     do { id = randomBytes(4).toString('hex').toUpperCase(); } while (this.rooms.has(id));
     const room = { id, players: [{ ...user, color: 1 }], status: 'waiting', winner: null, rematch: [], updatedAt: Date.now() };
-    Object.assign(room, definition.initial(), { game, mode });
+    Object.assign(room, definition.initial({ startLevel }), { game, mode });
     this.rooms.set(id, room);
     return room;
   }

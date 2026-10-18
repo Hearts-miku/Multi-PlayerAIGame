@@ -146,7 +146,7 @@ export function createApp({ databasePath = './data/game.sqlite', origins = ['htt
         }
       }).catch(() => console.error('Realtime operation failed'));
     });
-    action('room:create', ({ game, mode }) => games.create(user, { game, mode }));
+    action('room:create', ({ game, mode, startLevel }) => games.create(user, { game, mode, startLevel }));
     action('room:join', ({ id }) => games.join(user, id));
     action('game:move', ({ x, y }) => games.move(user.id, x, y));
     action('game:resign', () => games.resign(user.id));

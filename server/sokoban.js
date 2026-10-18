@@ -5,6 +5,11 @@ import { SOKOBAN_LEVELS as levels } from '../shared/sokoban-levels.js';
 import { gateOpen, nextLatches } from '../shared/sokoban-mechanics.js';
 export { gateOpen } from '../shared/sokoban-mechanics.js';
 
+export function createSokoban({ startLevel = 0 } = {}) {
+  if (!Number.isInteger(startLevel) || startLevel < 0 || startLevel >= levels.length) throw new Error('请选择有效的起始关卡');
+  return { sokoban: newSokoban(startLevel) };
+}
+
 export function newSokoban(level = 0, round = 0, revision = 0) {
   return { ...structuredClone(levels[level]), level, totalLevels: levels.length, round, revision,
     latches: [], phase: 'active', moves: 0, pushes: [0, 0], history: [], votes: { restart: [], next: [] } };
