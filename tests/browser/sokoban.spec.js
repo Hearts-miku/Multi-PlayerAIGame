@@ -21,6 +21,7 @@ test('cooperative puzzle: desktop/mobile moves, undo, consent, progression and r
     await b.getByRole('complementary',{name:'加入房间'}).getByRole('button',{name:/加入房间/}).click();
     await expect(b.getByTestId('sokoban-board')).toHaveAttribute('data-moves','0');
     async function move(p,d='向上') {
+      await expect(p.getByRole('button',{name:d,exact:true})).toBeEnabled();
       const previous=Number(await p.getByTestId('sokoban-board').getAttribute('data-moves'));
       await p.getByRole('button',{name:d,exact:true}).click();
       for(const page of [a,b]) await expect(page.getByTestId('sokoban-board')).toHaveAttribute('data-moves',String(previous+1));
@@ -28,13 +29,13 @@ test('cooperative puzzle: desktop/mobile moves, undo, consent, progression and r
     await expect(a.getByRole('button',{name:'向上',exact:true})).toBeEnabled();
     await a.keyboard.press('ArrowUp');await expect(b.getByTestId('sokoban-box-0')).toHaveAttribute('data-y','2');
     await a.getByRole('button',{name:'撤销我的最后一步',exact:true}).click();
-    await expect(b.getByTestId('sokoban-board')).toHaveAttribute('data-moves','0');
+    for(const p of [a,b]) await expect(p.getByTestId('sokoban-board')).toHaveAttribute('data-moves','0');
     await move(a);await move(a);await move(b);await move(b);
     for(const p of [a,b]) await expect(p.getByRole('heading',{name:'本关完成！',exact:true})).toBeVisible();
     await a.getByRole('button',{name:'准备下一关',exact:true}).click();
     await expect(a.getByTestId('sokoban-board')).toHaveAttribute('data-level','0');
     await b.getByRole('button',{name:'一起进入下一关',exact:true}).click();
-    await expect(a.getByTestId('sokoban-board')).toHaveAttribute('data-level','1');
+    for(const p of [a,b]) await expect(p.getByTestId('sokoban-board')).toHaveAttribute('data-level','1');
     await move(b,'向右');await move(a,'向右');await move(a,'向右');
     await expect(a.getByText('机关门已打开',{exact:true})).toBeVisible();
     const saved=await a.getByTestId('sokoban-board').getAttribute('data-moves');await b.close();
