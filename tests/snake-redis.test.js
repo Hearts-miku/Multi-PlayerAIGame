@@ -30,9 +30,19 @@ test('Redis snake: cross-instance frames, disconnect pause, atomic tick race and
       const socket = io(base, { path: SOCKET_PATH, addTrailingSlash: false, transports: ['websocket'], autoConnect: false, reconnection: false, extraHeaders: { Origin: origin, Cookie: `${COOKIE}=${token}` } });
       sockets.push(socket); const initial = state(socket, () => true); socket.connect(); await initial;
     }
+    const boardUsers = await Promise.all(['board_a', 'board_b'].map((name) => first.store.register(name, name, 'redis-test-password')));
+    const boardRoom = await first.games.create(boardUsers[0], { game: 'gomoku' });
+    await second.games.join(boardUsers[1], boardRoom.id);
+    await first.games.move(boardUsers[0].id, 0, 0);
+    const savedBoard = await second.games.get(boardRoom.id);
     const [a, b] = sockets;
     const created = await emit(a, 'room:create', { game: 'snake', mode: 'versus' }); assert.equal(created.ok, true);
     const id = created.room.id;
+    const savedSnake = await first.games.get(id);
+    await assert.rejects(() => second.games.move(users[0].id, 1, 1), /不是五子棋/);
+    await assert.rejects(() => second.games.readySnake(boardUsers[0].id, boardUsers.map((u) => u.id)), /不是贪食蛇/);
+    assert.deepEqual(await first.games.get(id), savedSnake);
+    assert.deepEqual(await second.games.get(boardRoom.id), savedBoard);
     assert.equal((await emit(b, 'room:join', { id })).ok, true);
     await emit(a, 'snake:ready'); assert.equal((await emit(b, 'snake:ready')).ok, true);
     assert.equal((await emit(a, 'snake:turn', { direction: 'up' })).ok, true);
@@ -53,6 +63,10 @@ test('Redis snake: cross-instance frames, disconnect pause, atomic tick race and
       assert.equal(results.filter(Boolean).length, 1);
       assert.equal((await rival.games.get(id)).snake.ticks, saved.snake.ticks + 1);
       await replacement.games.leave(users[0].id);
+      assert.deepEqual(await rival.games.get(boardRoom.id), savedBoard);
+      await rival.games.move(boardUsers[1].id, 0, 1);
+      assert.equal((await replacement.games.get(boardRoom.id)).moves.length, 2);
+      await replacement.games.leave(boardUsers[0].id);
     } finally { await rival.close(); }
   } finally {
     sockets.forEach((socket) => socket.disconnect());

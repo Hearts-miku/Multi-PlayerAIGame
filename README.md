@@ -123,11 +123,15 @@ npm run test:browser
 server/
   app.js       HTTP、登录验证、实时事件与权限
   store.js     用户、密码哈希与持久会话
-  game.js      五子棋规则和房间状态
+  game.js      通用房间生命周期与游戏规则分发
+  game-rules.js 游戏规则注册表
+  gomoku.js    五子棋独立规则
   snake.js     双人贪食蛇推进、碰撞和两种模式规则
   index.js     环境配置和服务启动
 src/
-  main.jsx     登录、大厅、房间与棋盘
+  main.jsx     登录、大厅与通用房间入口
+  game-views.js 游戏界面注册表
+  Gomoku.jsx   五子棋卡片、棋盘与对局
   Snake.jsx    贪食蛇入口、场地与键盘/触屏控制
   style.css    响应式界面
 tests/
@@ -136,7 +140,7 @@ tests/
   browser/game.spec.js  双浏览器端到端测试
 ```
 
-后续游戏可以增加独立规则模块，再接入大厅入口与对应实时事件。身份验证与会话层可以复用。
+新增游戏请遵循 [接入与回归规范](docs/adding-games.md)：独立规则和界面模块，明确游戏 ID 分发，保留全部旧游戏回归。公开模式定义位于 `shared/games.js`，卡片和模式弹窗由注册表驱动。
 
 ## 首版边界
 
