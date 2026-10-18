@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './snake.css';
+import GameCardSelect from './GameCardSelect.jsx';
 
 const directions = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
 const labels = { up: '向上', down: '向下', left: '向左', right: '向右' };
 
-export function SnakeCard() {
-  return <section className="snake-card">
+export function SnakeCard({ selected, disabled, onSelect }) {
+  return <section className={`snake-card selectable-game ${selected ? 'selected-game' : ''}`}><GameCardSelect name="贪食蛇" selected={selected} disabled={disabled} onSelect={onSelect}/>
     <div className="snake-card-copy"><span className="tag">反应与默契 <span>·</span> 2 人同屏</span>
       <h2>贪食蛇 <span>SNAKE DUO</span></h2><p>各走各的精彩，或一起吃掉整片果园。<br/>叫上朋友，来一场指尖上的追逐。</p>
       <p className="snake-modes-note">双人对战 · 碰撞淘汰 / 双人合作 · 共同收集 20 个食物</p>
