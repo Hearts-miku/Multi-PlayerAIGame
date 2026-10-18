@@ -1,27 +1,62 @@
 name: Verify
 on:
   push:
-    branches: [main]
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
+    name: all-game-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm test
+      - name: Start isolated TLS Redis
+        run: bash scripts/start-ci-redis.sh
+      - name: Require Redis and run every rule and integration test
+        run: |
+          node --input-type=module -e "if (!process.env.REDIS_URL || !process.env.NODE_EXTRA_CA_CERTS) throw new Error('Redis tests must not be skipped in CI')"
+          npm test
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
-      - uses: actions/upload-artifact@v4
+      - run: npx --no-install playwright install --with-deps chromium
+      - name: Run every game browser test against Redis
+        run: npm run test:browser
+        env:
+          REDIS_PREFIX: 'ci:browser:${{ github.run_id }}:${{ github.run_attempt }}:'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: browser-test-results
           path: test-results/
+      - name: Stop isolated Redis
+        if: always()
+        run: docker rm --force game-ci-redis || true
+
+  # Required by the Vercel project. Do not rename without updating that check.
+  # always() makes a failed/skipped dependency yield a FAILURE, not a skipped gate.
+  release-gate:
+    name: release-gate
+    needs: [test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Fail closed unless every test and build succeeded
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          if [ "$TEST_RESULT" != success ]; then
+            echo "Release blocked: all-game-tests=$TEST_RESULT"
+            exit 1
+          fi
+          echo 'All game tests, Redis tests, browser tests and production build passed.'

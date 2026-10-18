@@ -32,7 +32,9 @@ node --env-file=.env.local --test tests/redis.test.js tests/snake-redis.test.js
 
 Windows 使用本机 Edge 可设置 `PLAYWRIGHT_CHANNEL=msedge`。线上验收设置 `LIVE_BASE_URL=https://www.hearts-ai.top`；测试使用随机账号，不操作日常玩家房间。
 
-现有 CI 在每次 PR 和 main 推送时执行全套规则/集成测试、生产构建和所有浏览器用例，无按游戏路径跳过逻辑。Vercel Git 自动部署与 CI 是独立流程，不能把 CI 存在等同于失败会阻断部署；发布前必须先跑完本地检查，发布后做线上回归。若后续需要强制部署门禁，应另行把生产发布接到验证成功后的工作流。
+CI 在每次 push / PR 执行全套规则、集成、Redis、浏览器测试及生产构建，无按游戏路径跳过。Redis 在 runner 的临时 TLS 容器中运行；不需要生产凭据。`release-gate` 只在前置 `all-game-tests` 完整成功时成功，失败/跳过会明确失败。
+
+Vercel 项目的生产 Deployment Check 必须要求同一提交的 `release-gate` 成功，才给部署分配正式域名。构建可以提前进行，但测试等待、失败或缺失时不切换线上版本。禁止 Force Promote 绕过。门禁设置位于 Vercel 项目而非 `vercel.json`；迁移项目时须重新配置，不能仅复制工作流。详见 [发布门禁](release-gate.md)。
 
 ## 已有保护与边界
 
