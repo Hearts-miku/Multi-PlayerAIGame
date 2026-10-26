@@ -10,7 +10,17 @@ for (const mode of ['versus', 'coop']) test(`snake ${mode}: desktop + mobile con
     await context.request.get(origin, { headers: { ...headers, 'x-vercel-set-bypass-cookie': 'true' } });
   }
   const a = await contexts[0].newPage(); let b = await contexts[1].newPage();
-  const errors = [], watch = (page) => page.on('pageerror', (error) => errors.push(error.message)); watch(a); watch(b);
+  const errors = [], scores = new Map();
+  const watch = (page) => {
+    scores.set(page, []);
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('websocket', (socket) => socket.on('framereceived', ({ payload }) => {
+      const frame = String(payload);
+      if (!frame.startsWith('42[')) return;
+      const [event, room] = JSON.parse(frame.slice(2));
+      if (event === 'room:update' && room?.game === 'snake') scores.get(page).push(room.snake.scores.reduce((sum, score) => sum + score, 0));
+    }));
+  }; watch(a); watch(b);
   const suffix = randomUUID().replaceAll('-', '').slice(0, 10);
   try {
     for (const [page, username, name] of [[a, 'snake_a', '青柠'], [b, 'snake_b', '蓝莓']]) {
@@ -54,14 +64,18 @@ for (const mode of ['versus', 'coop']) test(`snake ${mode}: desktop + mobile con
     await b.getByRole('button', { name: '准备开始', exact: true }).click();
     await expect(a.getByTestId('snake-board')).toHaveAttribute('data-phase', 'running');
     if (mode === 'coop') {
-      await expect(a.getByRole('progressbar', { name: '合作收集进度' })).toHaveAttribute('value', '2', { timeout: 15_000 });
-      await expect(b.getByRole('progressbar', { name: '合作收集进度' })).toHaveAttribute('value', '2');
+      // A randomly replenished fruit can raise the score again before DOM polling.
+      // Both clients must receive the exact initial two-fruit result.
+      for (const page of [a, b]) await expect.poll(() => scores.get(page).includes(2), { timeout: 15_000 }).toBe(true);
       await b.close();
       await expect(a.getByTestId('snake-board')).toHaveAttribute('data-phase', 'paused', { timeout: 15_000 });
       const savedTick = await a.getByTestId('snake-board').getAttribute('data-tick');
       b = await contexts[1].newPage(); watch(b); await b.goto('/');
       await expect(b.getByTestId('snake-board')).toHaveAttribute('data-phase', 'paused');
       await expect(b.getByTestId('snake-board')).toHaveAttribute('data-tick', savedTick);
+      const pausedScore = scores.get(a).at(-1);
+      expect(pausedScore).toBeGreaterThanOrEqual(2);
+      for (const page of [a, b]) await expect(page.getByRole('progressbar', { name: '合作收集进度' })).toHaveAttribute('value', String(pausedScore));
       await a.getByRole('button', { name: '准备继续', exact: true }).click();
       await b.getByRole('button', { name: '准备继续', exact: true }).click();
       await expect(a.getByTestId('snake-board')).toHaveAttribute('data-phase', 'running');

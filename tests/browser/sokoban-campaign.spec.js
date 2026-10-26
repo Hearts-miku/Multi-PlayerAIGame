@@ -17,7 +17,13 @@ test('eleven-level campaign: two browsers solve every cooperative circuit and fi
       await expect(p.getByRole('button',{name:'选择默契搬运队',exact:true})).toBeEnabled();
     }
     await pages[0].getByRole('button',{name:'选择默契搬运队',exact:true}).click();
-    await pages[0].getByRole('button',{name:/^创建房间/}).click();
+    const creator=pages[0].getByRole('dialog',{name:'默契搬运队 · 创建房间'});
+    await expect(creator).toBeVisible();
+    await creator.getByLabel('起始关卡',{exact:true}).selectOption('0');
+    await expect(creator.getByRole('radio',{name:'双人合作',exact:true})).toBeChecked();
+    await creator.getByRole('button',{name:/^创建房间/}).click();
+    // Fail at room creation, rather than consuming the entire campaign timeout.
+    await expect(pages[0].locator('.room-code-box strong')).toBeVisible();
     const code=await pages[0].locator('.room-code-box strong').innerText();
     await pages[1].getByLabel('房间码',{exact:true}).fill(code);
     await pages[1].getByRole('complementary',{name:'加入房间'}).getByRole('button',{name:/加入房间/}).click();
