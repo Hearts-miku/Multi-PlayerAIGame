@@ -69,6 +69,16 @@ export class Games {
     // Leaving closes the table for both players; reconnecting does not count as leaving.
     this.rooms.delete(room.id); return room;
   }
+  lightsAction(userId, command, online) {
+    const room=this.member(userId);
+    if(room.game!=='lights')throw new Error('该房间不是星灯维修站');
+    return this.rulesFor(room).action(room,userId,command,online);
+  }
+  gravityAction(userId, command, online) {
+    const room=this.member(userId);
+    if(room.game!=='gravity')throw new Error('该房间不是引力四连');
+    return this.rulesFor(room).action(room,userId,command,online);
+  }
   sokobanAction(userId, command, online) {
     const room = this.member(userId);
     if (room.game !== 'sokoban') throw new Error('该房间不是默契搬运队');

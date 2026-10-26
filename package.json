@@ -12,7 +12,7 @@
     "start": "node server/index.js",
     "test": "node --test tests/*.test.js",
     "test:browser": "playwright test",
-    "test:redis": "node --env-file=.env.local --test tests/redis.test.js tests/snake-redis.test.js tests/sokoban-redis.test.js"
+    "test:redis": "node --env-file=.env.local --test tests/redis.test.js tests/snake-redis.test.js tests/sokoban-redis.test.js tests/creative-redis.test.js"
   },
   "dependencies": {
     "express": "^5.1.0",

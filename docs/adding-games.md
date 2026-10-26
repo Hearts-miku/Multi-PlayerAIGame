@@ -35,7 +35,7 @@ npm test
 npm run build
 npm run test:browser
 # 设置独立测试命名空间的真实 Redis 测试会自行清理其测试键
-node --env-file=.env.local --test tests/redis.test.js tests/snake-redis.test.js tests/sokoban-redis.test.js
+node --env-file=.env.local --test tests/redis.test.js tests/snake-redis.test.js tests/sokoban-redis.test.js tests/creative-redis.test.js
 ```
 
 Windows 使用本机 Edge 可设置 `PLAYWRIGHT_CHANNEL=msedge`。线上验收设置 `LIVE_BASE_URL=https://www.hearts-ai.top`；测试使用随机账号，不操作日常玩家房间。
@@ -51,4 +51,5 @@ Vercel 项目的生产 Deployment Check 必须要求同一提交的 `release-gat
 - Redis 测试在同一测试命名空间下保留五子棋房间，并运行贪食蛇跨实例帧、并发推进、重启恢复；验证五子棋未改动且还能继续落子。
 - 没有 `game` 字段的历史房间继续按旧版五子棋处理；未知 ID 不再默认为五子棋。现有房间的数据字段及 Redis 命名空间未迁移。
 - 默契搬运队独立使用 `sokoban:action`：覆盖八关合法通关、机关门占用、同色箱子限制、双人确认、撤销、过期指令、旧房间隔离；真实 Redis 双实例验证 Socket 广播、并发 CAS 与重启恢复，双浏览器覆盖手机控制、过关、断线与重开，并通过普通界面逐步走完八关、检查两端机关状态和最终共同胜利。`shared/sokoban-mechanics.js` 是前后端共用的机关判定；旧三关快照继续按原关卡数结束，再战升级到八关。
+- 星灯维修站与引力四连分别使用 `lights:action`、`gravity:action` 和独立规则/UI/CSS；自动化覆盖三关合作、开关权限、重力翻转与双方判胜、双实例并发、断线恢复、再战和旧游戏房间隔离。
 - 模块隔离和测试降低回归风险，不是任意代码变更的零影响保证。游戏仍共享进程、Redis、网络与配额；新增高频游戏仍需检查资源使用、CSS、导入错误和性能，不承诺进程或资源级隔离。
