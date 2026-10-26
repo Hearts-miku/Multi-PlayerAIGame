@@ -1,7 +1,8 @@
 import { randomInt } from 'node:crypto';
+import { newEncounters, encounterStep } from './maze-encounters.js';
 
 const vectors = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
-export function newMaze(seed = randomInt(1, 0x100000000), round = 0, revision = 0, adventure = true) {
+export function newMaze(seed = randomInt(1, 0x100000000), round = 0, revision = 0, adventure = true, encounters = true) {
   let randomState = seed >>> 0;
   const random = (n) => { randomState = (Math.imul(randomState,1664525)+1013904223)>>>0; return Math.floor(randomState/0x100000000*n); };
   const size=9, cells=Array(size*size).fill(false), stack=[10]; cells[10]=true;
@@ -20,6 +21,7 @@ export function newMaze(seed = randomInt(1, 0x100000000), round = 0, revision = 
   if(adventure) {
     const take=()=>candidates.splice(random(candidates.length),1)[0];
     state.adventure={portals:[take(),take()],beacons:[take(),take()],lit:false,sparks:Array.from({length:3},()=>({at:take(),collected:false})),teleports:0,stars:0,event:'找到传送门、幸运星和双人灯塔，开始探险吧！'};
+    if(encounters)state.encounters=newEncounters(state,candidates,random);
   }
   reveal(state);return state;
 }
@@ -41,7 +43,7 @@ export function mazeAction(room,id,command,online) {
     const votes=s.votes[command.kind];
     if(!votes.includes(id)) {
       votes.push(id);s.revision++;
-      if(votes.length===2)room.maze=command.kind==='restart'?newMaze(s.seed,s.round+1,s.revision,Boolean(s.adventure)):{...freshMaze(s),revision:s.revision};
+      if(votes.length===2)room.maze=command.kind==='restart'?newMaze(s.seed,s.round+1,s.revision,Boolean(s.adventure),Boolean(s.encounters)):{...freshMaze(s),revision:s.revision};
     }
   } else {
     let to;
@@ -67,6 +69,7 @@ export function mazeAction(room,id,command,online) {
       room.status='finished';room.winner=null;room.reason='maze-complete';
       if(s.adventure){const a=s.adventure;a.stars=1+Number(a.lit)+Number(a.sparks.every(t=>t.collected));a.event=`探险完成！获得 ${a.stars} 星评价。`;}
     }
+    if(room.status==='playing')encounterStep(s,player);
   }
   room.updatedAt=Date.now();return room;
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Games } from '../server/game.js';
 import { newMaze } from '../server/maze.js';
 import { mazePath } from './helpers/maze-path.js';
+import { encounterStep } from '../server/maze-encounters.js';
 const user=id=>({id,displayName:`p${id}`});
 function setup(){const games=new Games(),room=games.create(user(1),{game:'maze',mode:'coop'});games.join(user(2),room.id);const act=(id,c)=>games.mazeAction(id,{round:room.maze.round,revision:room.maze.revision,...c},[1,2]);return{games,room,act};}
 test('maze: 1000 deterministic seeds are connected, distinct and solvable by both owners',()=>{
@@ -11,7 +12,7 @@ test('maze: 1000 deterministic seeds are connected, distinct and solvable by bot
   const {room,act}=setup();room.maze=newMaze(seed);const s=room.maze;
   assert.deepEqual(newMaze(seed),s);assert.equal(new Set(s.treasures.map(t=>t.at)).size,4);
   assert.equal(s.treasures.filter(t=>t.owner===0).length,2);assert.equal(s.treasures.filter(t=>t.owner===1).length,2);
-  const landmarks=[...s.treasures.map(t=>t.at),...s.adventure.portals,...s.adventure.beacons,...s.adventure.sparks.map(t=>t.at),...s.actors,s.exit];
+  const landmarks=[...s.treasures.map(t=>t.at),...s.adventure.portals,...s.adventure.beacons,...s.adventure.sparks.map(t=>t.at),...s.encounters.spots.map(t=>t.at),...s.actors,s.exit];
   assert.equal(new Set(landmarks).size,landmarks.length);assert.ok(landmarks.every(at=>s.cells[at]));
   for(let at=0;at<s.cells.length;at++)if(s.cells[at])mazePath(s,s.actors[0],at);
   layouts.add(JSON.stringify([s.cells,s.treasures]));
@@ -20,6 +21,39 @@ test('maze: 1000 deterministic seeds are connected, distinct and solvable by bot
   assert.equal(room.status,'finished');assert.equal(room.reason,'maze-complete');assert.ok(s.treasures.every(t=>t.collected));assert.ok(s.actors.every(at=>at===s.exit));
  }
  assert.equal(layouts.size,1000);
+});
+
+test('maze encounters: all five effects, one-time rewards and simultaneous picnic',()=>{
+ for(const kind of ['fireflies','compass','meteor','passage','picnic']){
+  const s=newMaze(28),e=s.encounters,spot=e.spots.find(t=>t.kind===kind),cells=[...s.cells];s.actors[0]=spot.at;s.seen.fill(false);
+  encounterStep(s,0);assert.equal(spot.used,true);assert.equal(e.history.length,1);
+  if(kind==='fireflies')for(const at of s.actors)assert.equal(s.seen[at],true);
+  if(kind==='compass'){assert.equal(s.seen[s.exit],true);for(const t of s.treasures)assert.equal(s.seen[t.at],true);}
+  if(kind==='meteor')assert.equal(s.adventure.sparks.filter(t=>t.collected).length,1);
+  if(kind==='passage'){assert.notEqual(e.passage,null);assert.equal(cells[e.passage],false);assert.equal(s.cells[e.passage],true);}
+  const saved=structuredClone(s);encounterStep(s,0);assert.deepEqual(s,saved);
+  if(kind==='picnic'){assert.equal(e.picnic.done,false);s.actors[1]=spot.at;encounterStep(s,1);assert.equal(e.picnic.done,true);assert.equal(e.badges,1);assert.equal(e.history.length,2);encounterStep(s,1);assert.equal(e.badges,1);}
+ }
+ const s=newMaze(9);s.adventure.sparks.forEach(t=>t.collected=true);s.actors[0]=s.encounters.spots.find(t=>t.kind==='meteor').at;encounterStep(s,0);assert.equal(s.encounters.badges,1);
+});
+
+test('maze encounters: 100 maps can discover every event, picnic and still finish; restart preserves the event deck',()=>{
+ for(let seed=1;seed<=100;seed++){
+  const {room,act}=setup();room.maze=newMaze(seed);const s=room.maze,original=structuredClone(s);
+  const walk=(player,to)=>{for(const direction of mazePath(s,s.actors[player],to)){if(room.status==='finished')break;act(player+1,{kind:'move',direction});}};
+  for(const spot of s.encounters.spots)walk(0,spot.at);
+  assert.equal(s.encounters.spots.filter(t=>t.used).length,5);assert.equal(s.encounters.history.length,5);
+  walk(0,s.encounters.picnic.at);walk(1,s.encounters.picnic.at);assert.equal(s.encounters.picnic.done,true);assert.equal(s.encounters.history.length,6);
+  assert.ok(s.encounters.badges>=1);assert.ok(original.cells.every((open,i)=>!open||s.cells[i]));
+  for(let player=0;player<2;player++)for(const to of [...s.treasures.filter(t=>t.owner===player).map(t=>t.at),s.exit])walk(player,to);
+  assert.equal(room.status,'finished');
+  // A new same-seed instance is exactly reproducible; no action-time randomness.
+  assert.deepEqual(newMaze(seed),original);
+ }
+ const {room,act}=setup();const original=structuredClone(room.maze);
+ for(const direction of mazePath(room.maze,room.maze.actors[0],room.maze.encounters.spots[0].at))act(1,{kind:'move',direction});
+ act(1,{kind:'restart'});act(2,{kind:'restart'});assert.deepEqual(room.maze.encounters,original.encounters);assert.deepEqual(room.maze.cells,original.cells);
+ room.maze=newMaze(5,0,0,true,false);act(1,{kind:'restart'});act(2,{kind:'restart'});assert.equal(room.maze.encounters,undefined);assert.ok(room.maze.adventure);
 });
 test('maze: wall, ownership, membership, stale moves and offline protections are atomic',()=>{
  const {games,room,act}=setup(),before=structuredClone(room);

@@ -36,6 +36,9 @@ for(const storage of ['memory','redis'])test(`${game} ${storage}: authenticated 
   const results=await Promise.allSettled([first,second].map(backend=>Promise.resolve().then(()=>backend.games[`${game}Action`](users[1].id,next,online))));
   assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
   let current=(await second.games.get(id))[game];assert.equal(current.revision,2);assert.deepEqual(await first.games.get(old.id),original);
+  const encounterPaths=current.encounters.spots.map(t=>mazePath(current,current.actors[0],t.at)).sort((a,b)=>a.length-b.length);
+  for(const direction of encounterPaths[0])current=(await first.games.mazeAction(users[0].id,{kind:'move',direction,round:current.round,revision:current.revision},online)).maze;
+  assert.ok(current.encounters.spots.some(t=>t.used));assert.ok(current.encounters.history.length>0);
   const paths=current.adventure.portals.map(at=>mazePath(current,current.actors[0],at)).sort((a,b)=>a.length-b.length);
   for(const direction of paths[0])current=(await first.games.mazeAction(users[0].id,{kind:'move',direction,round:current.round,revision:current.revision},online)).maze;
   const teleport={kind:'teleport',round:current.round,revision:current.revision};

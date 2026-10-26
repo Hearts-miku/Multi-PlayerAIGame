@@ -29,6 +29,12 @@ test('maze: random rooms, shared fog, both treasure owners, reconnect, consent a
   pages[1]=await contexts[1].newPage();watch(pages[1]);await pages[1].goto('/');await synced(saved.revision);expect(states.get(pages[1]).maze).toEqual(saved);
   await click(0,pages[0].getByRole('button',{name:'重走这张地图',exact:true}));await click(1,pages[1].getByRole('button',{name:'同意重走这张地图',exact:true}));expect(states.get(pages[0]).maze.seed).toBe(initial.seed);expect(states.get(pages[0]).maze.treasures).toEqual(initial.treasures);
   await click(0,pages[0].getByRole('button',{name:'换张随机地图',exact:true}));await click(1,pages[1].getByRole('button',{name:'同意换张随机地图',exact:true}));const s=states.get(pages[0]).maze;expect(s.seed).not.toBe(initial.seed);
+  for(const spot of s.encounters.spots)await walk(0,spot.at);
+  for(const p of pages)await expect(p.getByTestId('maze-encounter-count')).toHaveText('5 / 5');
+  const picnic=states.get(pages[0]).maze.encounters.picnic.at;
+  await walk(0,picnic);await walk(1,picnic);
+  for(const p of pages){await expect(p.getByTestId('maze-picnic')).toHaveAttribute('data-complete','true');expect(states.get(p).maze.encounters.badges).toBeGreaterThanOrEqual(1);}
+  const afterEvents=structuredClone(states.get(pages[0]).maze);await pages[1].reload();await synced(afterEvents.revision);expect(states.get(pages[1]).maze).toEqual(afterEvents);
   await walk(0,s.adventure.beacons[0]);
   for(const p of pages)await expect(p.getByTestId('maze-beacon-goal')).toHaveAttribute('data-complete','false');
   await walk(1,s.adventure.beacons[1]);
