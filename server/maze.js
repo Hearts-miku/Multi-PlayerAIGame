@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 
 const vectors = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
-export function newMaze(seed = randomInt(1, 0x100000000), round = 0, revision = 0) {
+export function newMaze(seed = randomInt(1, 0x100000000), round = 0, revision = 0, adventure = true) {
   let randomState = seed >>> 0;
   const random = (n) => { randomState = (Math.imul(randomState,1664525)+1013904223)>>>0; return Math.floor(randomState/0x100000000*n); };
   const size=9, cells=Array(size*size).fill(false), stack=[10]; cells[10]=true;
@@ -17,6 +17,10 @@ export function newMaze(seed = randomInt(1, 0x100000000), round = 0, revision = 
   const actors=[10,70], candidates=cells.flatMap((open,i)=>open&&!actors.includes(i)&&i!==exit?[i]:[]);
   const treasures=Array.from({length:4},(_,i)=>({at:candidates.splice(random(candidates.length),1)[0],owner:i%2,collected:false}));
   const state={seed,size,cells,actors,exit,treasures,seen:Array(size*size).fill(false),round,revision,moves:0,votes:{restart:[],reroll:[]}};
+  if(adventure) {
+    const take=()=>candidates.splice(random(candidates.length),1)[0];
+    state.adventure={portals:[take(),take()],beacons:[take(),take()],lit:false,sparks:Array.from({length:3},()=>({at:take(),collected:false})),teleports:0,stars:0,event:'找到传送门、幸运星和双人灯塔，开始探险吧！'};
+  }
   reveal(state);return state;
 }
 function reveal(s) {
@@ -37,16 +41,32 @@ export function mazeAction(room,id,command,online) {
     const votes=s.votes[command.kind];
     if(!votes.includes(id)) {
       votes.push(id);s.revision++;
-      if(votes.length===2)room.maze=command.kind==='restart'?newMaze(s.seed,s.round+1,s.revision):{...freshMaze(s),revision:s.revision};
+      if(votes.length===2)room.maze=command.kind==='restart'?newMaze(s.seed,s.round+1,s.revision,Boolean(s.adventure)):{...freshMaze(s),revision:s.revision};
     }
   } else {
-    if(command.kind!=='move'||!Object.hasOwn(vectors,command.direction))throw new Error('无效的移动');
-    const at=s.actors[player],[dx,dy]=vectors[command.direction],x=at%s.size+dx,y=Math.floor(at/s.size)+dy,to=y*s.size+x;
-    if(x<0||y<0||x>=s.size||y>=s.size||!s.cells[to])throw new Error('前方是墙，请换个方向');
+    let to;
+    if(command.kind==='teleport') {
+      const portal=s.adventure?.portals.indexOf(s.actors[player])??-1;
+      if(portal<0)throw new Error('请先站到传送门上');
+      to=s.adventure.portals[1-portal];s.adventure.teleports++;s.adventure.event=`${player+1}号穿过了传送门，发现一条捷径！`;
+    } else {
+      if(command.kind!=='move'||!Object.hasOwn(vectors,command.direction))throw new Error('无效的移动');
+      const at=s.actors[player],[dx,dy]=vectors[command.direction],x=at%s.size+dx,y=Math.floor(at/s.size)+dy;
+      to=y*s.size+x;
+      if(x<0||y<0||x>=s.size||y>=s.size||!s.cells[to])throw new Error('前方是墙，请换个方向');
+    }
     s.actors[player]=to;s.moves++;s.revision++;s.votes={restart:[],reroll:[]};
-    for(const treasure of s.treasures)if(treasure.at===to&&treasure.owner===player)treasure.collected=true;
+    for(const treasure of s.treasures)if(treasure.at===to&&treasure.owner===player&&!treasure.collected){treasure.collected=true;if(s.adventure)s.adventure.event=`${player+1}号找到了一颗自己的宝石！`;}
     reveal(s);
-    if(s.treasures.every(t=>t.collected)&&s.actors.every(at=>at===s.exit)){room.status='finished';room.winner=null;room.reason='maze-complete';}
+    if(s.adventure){
+      const a=s.adventure;
+      for(const spark of a.sparks)if(spark.at===to&&!spark.collected){spark.collected=true;a.event=`${player+1}号捡到了幸运星！已找到 ${a.sparks.filter(t=>t.collected).length} / 3`;}
+      if(!a.lit&&a.beacons.every(at=>s.actors.includes(at))){a.lit=true;s.seen.fill(true);a.event='默契满分！双人灯塔亮起，整张地图已揭晓！';}
+    }
+    if(s.treasures.every(t=>t.collected)&&s.actors.every(at=>at===s.exit)){
+      room.status='finished';room.winner=null;room.reason='maze-complete';
+      if(s.adventure){const a=s.adventure;a.stars=1+Number(a.lit)+Number(a.sparks.every(t=>t.collected));a.event=`探险完成！获得 ${a.stars} 星评价。`;}
+    }
   }
   room.updatedAt=Date.now();return room;
 }

@@ -19,16 +19,27 @@ test('maze: random rooms, shared fog, both treasure owners, reconnect, consent a
   async function click(i,locator){await expect(locator).toBeEnabled();const rev=states.get(pages[i]).maze.revision;await locator.click();await synced(rev+1);}
   const labels={up:'向上',down:'向下',left:'向左',right:'向右'};
   async function move(i,direction,keyboard=false){if(keyboard){const rev=states.get(pages[i]).maze.revision;await pages[i].bringToFront();await pages[i].getByRole('button',{name:labels[direction],exact:true}).focus();await pages[i].keyboard.press({up:'ArrowUp',down:'ArrowDown',left:'ArrowLeft',right:'ArrowRight'}[direction]);await synced(rev+1);}else await click(i,pages[i].getByRole('button',{name:labels[direction],exact:true}));const s=states.get(pages[i]).maze;for(const p of pages){await expect(p.getByTestId(`maze-player-${i}`)).toHaveAttribute('data-position',String(s.actors[i]));await expect(p.getByTestId(`maze-cell-${s.actors[i]}`)).toHaveAttribute('data-seen','true');}await pages[i].waitForTimeout(60);}
+  await expect(pages[0].getByRole('button',{name:'使用传送门',exact:true})).toBeDisabled();
   await move(0,mazePath(initial,initial.actors[0],initial.exit)[0],true);
+  async function walk(i,to){const current=states.get(pages[i]).maze;for(const direction of mazePath(current,current.actors[i],to))await move(i,direction);}
+  await walk(0,initial.adventure.portals[0]);
+  await click(0,pages[0].getByRole('button',{name:'使用传送门',exact:true}));
+  for(const p of pages){await expect(p.getByTestId('maze-player-0')).toHaveAttribute('data-position',String(initial.adventure.portals[1]));expect(states.get(p).maze.adventure.teleports).toBe(1);}
   const saved=structuredClone(states.get(pages[0]).maze);await pages[1].close();await expect(pages[0].getByRole('heading',{name:'等队友回来继续',exact:true})).toBeVisible();await expect(pages[0].getByRole('button',{name:'向上',exact:true})).toBeDisabled();
   pages[1]=await contexts[1].newPage();watch(pages[1]);await pages[1].goto('/');await synced(saved.revision);expect(states.get(pages[1]).maze).toEqual(saved);
   await click(0,pages[0].getByRole('button',{name:'重走这张地图',exact:true}));await click(1,pages[1].getByRole('button',{name:'同意重走这张地图',exact:true}));expect(states.get(pages[0]).maze.seed).toBe(initial.seed);expect(states.get(pages[0]).maze.treasures).toEqual(initial.treasures);
   await click(0,pages[0].getByRole('button',{name:'换张随机地图',exact:true}));await click(1,pages[1].getByRole('button',{name:'同意换张随机地图',exact:true}));const s=states.get(pages[0]).maze;expect(s.seed).not.toBe(initial.seed);
+  await walk(0,s.adventure.beacons[0]);
+  for(const p of pages)await expect(p.getByTestId('maze-beacon-goal')).toHaveAttribute('data-complete','false');
+  await walk(1,s.adventure.beacons[1]);
+  for(const p of pages){await expect(p.getByTestId('maze-beacon-goal')).toHaveAttribute('data-complete','true');await expect(p.locator('.maze-cell[data-seen="true"]')).toHaveCount(81);}
+  for(const spark of s.adventure.sparks)await walk(0,spark.at);
+  for(const p of pages)await expect(p.getByTestId('maze-spark-goal')).toHaveAttribute('data-count','3');
   for(let i=0;i<2;i++)for(const to of [...s.treasures.filter(t=>t.owner===i).map(t=>t.at),s.exit]){
    const current=states.get(pages[i]).maze;
    for(const direction of mazePath(current,current.actors[i],to)){if(states.get(pages[i]).status==='finished')break;await move(i,direction);}
   }
-  for(const p of pages){await expect(p.getByRole('heading',{name:'宝物到手，一起回家！',exact:true})).toBeVisible();expect(states.get(p).maze.treasures.every(t=>t.collected)).toBe(true);expect(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
+  for(const p of pages){await expect(p.getByRole('heading',{name:'宝物到手，一起回家！',exact:true})).toBeVisible();await expect(p.getByTestId('maze-rating')).toHaveAttribute('data-stars','3');expect(states.get(p).maze.treasures.every(t=>t.collected)).toBe(true);expect(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
   await pages[0].getByRole('button',{name:'再来一局',exact:true}).click();await pages[1].getByRole('button',{name:'接受再来一局',exact:true}).click();for(const p of pages){await expect(p.getByRole('button',{name:'向上',exact:true})).toBeEnabled();expect(states.get(p).maze.seed).not.toBe(s.seed);}
   pages[0].once('dialog',d=>d.accept());await pages[0].getByRole('button',{name:'离开房间',exact:true}).click();await expect(pages[1].getByRole('button',{name:'选择迷雾寻宝',exact:true})).toBeEnabled();expect(errors).toEqual([]);
  } finally {for(const c of contexts)await c.close();}

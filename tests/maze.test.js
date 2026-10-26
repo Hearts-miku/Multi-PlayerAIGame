@@ -11,6 +11,8 @@ test('maze: 1000 deterministic seeds are connected, distinct and solvable by bot
   const {room,act}=setup();room.maze=newMaze(seed);const s=room.maze;
   assert.deepEqual(newMaze(seed),s);assert.equal(new Set(s.treasures.map(t=>t.at)).size,4);
   assert.equal(s.treasures.filter(t=>t.owner===0).length,2);assert.equal(s.treasures.filter(t=>t.owner===1).length,2);
+  const landmarks=[...s.treasures.map(t=>t.at),...s.adventure.portals,...s.adventure.beacons,...s.adventure.sparks.map(t=>t.at),...s.actors,s.exit];
+  assert.equal(new Set(landmarks).size,landmarks.length);assert.ok(landmarks.every(at=>s.cells[at]));
   for(let at=0;at<s.cells.length;at++)if(s.cells[at])mazePath(s,s.actors[0],at);
   layouts.add(JSON.stringify([s.cells,s.treasures]));
   for(let player=0;player<2;player++)for(const to of [...s.treasures.filter(t=>t.owner===player).map(t=>t.at),s.exit])
@@ -21,12 +23,38 @@ test('maze: 1000 deterministic seeds are connected, distinct and solvable by bot
 });
 test('maze: wall, ownership, membership, stale moves and offline protections are atomic',()=>{
  const {games,room,act}=setup(),before=structuredClone(room);
- for(const command of [{kind:'move',direction:'up'},{kind:'move',direction:'bad'},{kind:'bad'},{kind:'move',direction:'right',revision:-1},{kind:'move',direction:'right',round:-1}]){assert.throws(()=>act(1,command));assert.deepEqual(room,before);}
+ for(const command of [{kind:'teleport'},{kind:'move',direction:'up'},{kind:'move',direction:'bad'},{kind:'bad'},{kind:'move',direction:'right',revision:-1},{kind:'move',direction:'right',round:-1}]){assert.throws(()=>act(1,command));assert.deepEqual(room,before);}
  assert.throws(()=>games.mazeAction(99,{},[1,2]),/尚未/);
  assert.throws(()=>games.mazeAction(1,{round:0,revision:0,kind:'restart'},[1]),/上线/);assert.deepEqual(room,before);
  const s=room.maze,other=s.treasures.find(t=>t.owner===1);
  for(const direction of mazePath(s,s.actors[0],other.at))act(1,{kind:'move',direction});
  assert.equal(other.collected,false);assert.equal(room.status,'playing');assert.equal(s.seen[other.at],true);
+});
+
+test('maze: 100 seeds support portals, simultaneous beacons, unique spark rewards and three-star wins',()=>{
+ for(let seed=1;seed<=100;seed++){
+  const {room,act}=setup();room.maze=newMaze(seed);const s=room.maze,a=s.adventure;
+  const walk=(player,to)=>{for(const direction of mazePath(s,s.actors[player],to)){if(room.status==='finished')break;act(player+1,{kind:'move',direction});}};
+  walk(0,a.portals[0]);const moves=s.moves,revision=s.revision;
+  act(1,{kind:'restart'});act(1,{kind:'teleport'});assert.equal(s.actors[0],a.portals[1]);assert.equal(s.moves,moves+1);assert.equal(s.revision,revision+2);assert.equal(a.teleports,1);assert.deepEqual(s.votes,{restart:[],reroll:[]});assert.equal(s.seen[a.portals[1]],true);
+  act(1,{kind:'teleport'});assert.equal(s.actors[0],a.portals[0]);assert.equal(a.teleports,2);
+  walk(0,a.beacons[0]);assert.equal(a.lit,false);walk(1,a.beacons[1]);assert.equal(a.lit,true);assert.ok(s.seen.every(Boolean));
+  for(const spark of a.sparks)walk(0,spark.at);assert.ok(a.sparks.every(t=>t.collected));
+  const collected=structuredClone(a.sparks);walk(0,a.sparks[0].at);assert.deepEqual(a.sparks,collected);
+  for(let player=0;player<2;player++)for(const to of [...s.treasures.filter(t=>t.owner===player).map(t=>t.at),s.exit])walk(player,to);
+  assert.equal(room.status,'finished');assert.equal(a.stars,3);
+ }
+});
+
+test('maze: same-map restart resets adventure rewards; legacy rooms remain playable until rematch',()=>{
+ const {games,room,act}=setup(),initial=structuredClone(room.maze);
+ for(const direction of mazePath(room.maze,room.maze.actors[0],room.maze.adventure.sparks[0].at))act(1,{kind:'move',direction});
+ assert.ok(room.maze.adventure.sparks.some(t=>t.collected));act(1,{kind:'restart'});act(2,{kind:'restart'});assert.deepEqual(room.maze.adventure,initial.adventure);
+ room.maze=newMaze(79,0,0,false);const legacy=structuredClone(room.maze);
+ assert.throws(()=>act(1,{kind:'teleport'}),/传送门/);assert.deepEqual(room.maze,legacy);
+ act(1,{kind:'restart'});act(2,{kind:'restart'});assert.equal(room.maze.adventure,undefined);assert.deepEqual(room.maze.treasures,legacy.treasures);
+ const s=room.maze;for(let player=0;player<2;player++)for(const to of [...s.treasures.filter(t=>t.owner===player).map(t=>t.at),s.exit])for(const direction of mazePath(s,s.actors[player],to)){if(room.status==='finished')break;act(player+1,{kind:'move',direction});}
+ assert.equal(room.status,'finished');games.rematch(1);games.rematch(2);assert.ok(room.maze.adventure);assert.equal(room.maze.adventure.stars,0);
 });
 test('maze: consent, same-map restart, fresh-map reroll, replay and all existing games stay isolated',()=>{
  const {games,room,act}=setup(),old=[];

@@ -35,8 +35,14 @@ for(const storage of ['memory','redis'])test(`${game} ${storage}: authenticated 
   const online=users.slice(0,2).map(u=>u.id),next={...command,direction:mazePath(created.room.maze,created.room.maze.actors[1],created.room.maze.exit)[0],revision:1};
   const results=await Promise.allSettled([first,second].map(backend=>Promise.resolve().then(()=>backend.games[`${game}Action`](users[1].id,next,online))));
   assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
-  const saved=structuredClone(await second.games.get(id));assert.equal(saved[game].revision,2);assert.deepEqual(await first.games.get(old.id),original);
-  await assert.rejects(async()=>first.games[`${game}Action`](users[0].id,{...command,revision:2},[users[0].id]),/上线/);
+  let current=(await second.games.get(id))[game];assert.equal(current.revision,2);assert.deepEqual(await first.games.get(old.id),original);
+  const paths=current.adventure.portals.map(at=>mazePath(current,current.actors[0],at)).sort((a,b)=>a.length-b.length);
+  for(const direction of paths[0])current=(await first.games.mazeAction(users[0].id,{kind:'move',direction,round:current.round,revision:current.revision},online)).maze;
+  const teleport={kind:'teleport',round:current.round,revision:current.revision};
+  const jumps=await Promise.allSettled([first,second].map(backend=>Promise.resolve().then(()=>backend.games.mazeAction(users[0].id,teleport,online))));
+  assert.equal(jumps.filter(r=>r.status==='fulfilled').length,1);
+  const saved=structuredClone(await second.games.get(id));assert.equal(saved.maze.adventure.teleports,1);
+  await assert.rejects(async()=>first.games[`${game}Action`](users[0].id,{...command,revision:saved.maze.revision},[users[0].id]),/上线/);
   if(storage==='redis'){
    sockets.forEach(s=>s.disconnect());await Promise.all(apps.map(app=>app.close()));replacement=redisBackend(process.env.REDIS_URL,prefix);await replacement.ready;
    assert.deepEqual((await replacement.games.get(id))[game],saved[game]);
