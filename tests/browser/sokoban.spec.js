@@ -52,6 +52,8 @@ test('cooperative puzzle: desktop/mobile moves, undo, consent, progression and r
     await expect(b.getByRole('button',{name:'选择默契搬运队',exact:true})).toBeEnabled();
     await b.getByRole('button',{name:'选择默契搬运队',exact:true}).click();
     await expect(b.getByLabel('起始关卡',{exact:true})).toHaveValue('0');
+    await expect(b.getByLabel('起始关卡',{exact:true}).locator('option')).toHaveCount(11);
+    await expect(b.getByRole('option',{name:'第 11 关 · 交叉归航',exact:true})).toHaveCount(1);
     await b.getByLabel('起始关卡',{exact:true}).selectOption('7');
     await expect(b.getByLabel('起始关卡',{exact:true})).toBeInViewport();
     await b.screenshot({path:info.outputPath('mobile-level-picker.png'),fullPage:true});

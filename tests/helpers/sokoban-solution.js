@@ -3,9 +3,10 @@ import { gateOpen, nextLatches } from '../../shared/sokoban-mechanics.js';
 
 // A legal walkthrough generated through the same public game operations as players.
 // No board mutation, teleports or skipped levels: these moves also drive browser tests.
-export function campaignSolution() {
+export function campaignSolution(legacyTotal) {
   const games = new Games();
   const room = games.create({id:1,displayName:'orange'},{game:'sokoban',mode:'coop'});
+  if(legacyTotal)room.sokoban.totalLevels=legacyTotal;
   games.join({id:2,displayName:'blue'},room.id);
   const steps=[];
   const act=(player,kind,direction)=>{
@@ -52,6 +53,20 @@ export function campaignSolution() {
   push(1,'up');walk(2,7,4);push(2,'up');walk(1,11,2);walk(2,12,6);walk(2,11,5);
   walk(1,2,1);push(1,'down',4);walk(1,1,6);push(1,'right',10);walk(1,12,7);push(1,'up',3);
   walk(2,7,1);push(2,'down',4);walk(2,6,6);push(2,'right',5);walk(2,12,7);push(2,'up');
+  if(legacyTotal===8){if(room.status!=='finished')throw new Error('Legacy campaign did not finish');return {steps,room};}
+  next();
+  // Remote stair gate: blue must repeatedly escort orange before the final delivery.
+  push(1,'up');walk(2,7,4);push(2,'up');walk(2,11,5);walk(1,11,2);walk(2,12,6);walk(2,11,5);
+  walk(1,2,1);push(1,'down',4);walk(1,1,6);push(1,'right',10);walk(1,12,7);push(1,'up',4);walk(1,12,4);
+  walk(2,7,1);push(2,'down',4);walk(2,6,6);push(2,'right',4);walk(2,11,7);push(2,'up');next();
+  // Leave both crates behind until the two pairs of distant locks are open.
+  push(1,'up');push(2,'up');walk(1,7,2);walk(2,8,6);walk(1,11,2);walk(2,12,6);walk(2,11,5);
+  walk(1,2,1);push(1,'down',4);walk(1,1,6);push(1,'right',10);walk(1,12,7);push(1,'up',3);
+  walk(2,3,1);push(2,'down',4);walk(2,2,6);push(2,'right',9);walk(2,12,7);push(2,'up');next();
+  // Split to opposite shores, then deliver each crate across the other's route.
+  push(1,'up');push(2,'up');walk(1,2,2);walk(2,12,2);
+  walk(1,6,1);push(1,'down',4);walk(1,5,6);push(1,'right',6);walk(1,12,7);push(1,'up');
+  walk(2,8,1);push(2,'down',4);walk(2,9,6);push(2,'left',6);walk(2,2,7);push(2,'up');
   if(room.status!=='finished')throw new Error('Campaign did not finish');
   return {steps,room};
 }

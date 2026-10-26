@@ -9,12 +9,12 @@ import { campaignSolution } from './helpers/sokoban-solution.js';
 const user = (id) => ({ id, displayName: `p${id}` });
 test('room creation accepts every start level, defaults to first, and rejects invalid input atomically', () => {
   const games=new Games();
-  for(let level=0;level<8;level++) {
+  for(let level=0;level<SOKOBAN_LEVELS.length;level++) {
     const room=games.create(user(level+10),{game:'sokoban',mode:'coop',startLevel:level});
     assert.deepEqual(room.sokoban,newSokoban(level));assert.equal(room.status,'waiting');
   }
   const saved=structuredClone(games.list());
-  for(const startLevel of [-1,8,1.5,'7',null,{},NaN]) assert.throws(()=>games.create(user(99),{game:'sokoban',mode:'coop',startLevel}),/起始关卡/);
+  for(const startLevel of [-1,SOKOBAN_LEVELS.length,1.5,'7',null,{},NaN]) assert.throws(()=>games.create(user(99),{game:'sokoban',mode:'coop',startLevel}),/起始关卡/);
   assert.deepEqual(games.list(),saved);
   assert.equal(games.create(user(99),{game:'sokoban',mode:'coop'}).sokoban.level,0);
   assert.equal(games.create(user(100),{game:'gomoku',startLevel:7}).sokoban,undefined);
@@ -40,7 +40,7 @@ function setup() {
   };
   return { games, room, act, walk };
 }
-test('legacy three-level campaigns retain their rules, consent and completion; replay upgrades to eight', () => {
+test('legacy three-level campaigns retain their rules, consent and completion; replay upgrades to the current campaign', () => {
   const {games,room,act,walk}=setup();
   room.sokoban.totalLevels=3;delete room.sokoban.latches;
   for(const id of [1,2]) {act(id,'move','up');act(id,'move','up');}
@@ -57,14 +57,14 @@ test('legacy three-level campaigns retain their rules, consent and completion; r
   walk(2,9,4);for(let i=0;i<6;i++) act(2,'move','left');walk(2,2,3);act(2,'move','down');
   assert.equal(room.status,'finished');assert.equal(room.reason,'sokoban-complete');assert.deepEqual(room.sokoban.boxes,room.sokoban.goals);
   games.rematch(1);games.rematch(2);assert.equal(room.sokoban.level,0);assert.equal(room.status,'playing');
-  assert.equal(room.sokoban.totalLevels,8);
+  assert.equal(room.sokoban.totalLevels,SOKOBAN_LEVELS.length);
 });
 
-test('all eight levels are solvable through ordinary multiplayer moves and shared consent', () => {
-  assert.equal(SOKOBAN_LEVELS.length,8);
+test('all eleven levels are solvable through ordinary multiplayer moves and shared consent', () => {
+  assert.equal(SOKOBAN_LEVELS.length,11);
   const {steps,room}=campaignSolution();
-  assert.equal(steps.filter(s=>s.kind==='next').length,14);
-  for(let level=0;level<8;level++) {
+  assert.equal(steps.filter(s=>s.kind==='next').length,(SOKOBAN_LEVELS.length-1)*2);
+  for(let level=0;level<SOKOBAN_LEVELS.length;level++) {
     const moves=steps.filter(s=>s.level===level&&s.kind==='move');
     assert.deepEqual([...new Set(moves.map(s=>s.player))].sort(),[1,2]);
     assert.equal(moves.at(-1).phase,'cleared');
@@ -127,4 +127,8 @@ test('gates require a teammate, cannot close onto occupants, and wrong-color cra
   act(1,'move','right');assert.throws(()=>act(2,'move','left'),/门内/);
   act(1,'move','right');act(2,'move','left');assert.equal(gateOpen(room.sokoban),false);
   act(2,'move','right');walk(1,5,4);assert.throws(()=>act(1,'move','right'),/自己颜色/);
+});
+
+test('legacy eight-level campaign finishes without migrating an active room',()=>{
+ const {room}=campaignSolution(8);assert.equal(room.status,'finished');assert.equal(room.sokoban.level,7);assert.equal(room.sokoban.totalLevels,8);
 });

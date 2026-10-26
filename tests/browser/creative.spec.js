@@ -32,10 +32,10 @@ for(const game of ['lights','gravity'])test(`${game}: two players create, play, 
   pages[1]=await contexts[1].newPage();watch(pages[1]);await pages[1].goto('/');await expect(pages[1].getByTestId(`${game}-board`)).toHaveAttribute('data-revision','1');
   if(game==='lights'){
    await click(0,pages[0].getByRole('button',{name:'申请重开本关',exact:true}));await click(1,pages[1].getByRole('button',{name:'同意重开本关',exact:true}));
-   for(let level=0;level<3;level++){
+   for(let level=0;level<LIGHT_LEVELS.length;level++){
     for(const index of LIGHT_LEVELS[level].scramble){const player=switchOwner(index,LIGHT_LEVELS[level].size);await click(player,pages[player].getByTestId(`light-${index}`));}
     for(const p of pages)await expect(p.getByTestId('lights-board')).toHaveAttribute('data-phase','cleared');
-    if(level<2){await click(0,pages[0].getByRole('button',{name:'准备下一关',exact:true}));await click(1,pages[1].getByRole('button',{name:'一起进入下一关',exact:true}));}
+    if(level<LIGHT_LEVELS.length-1){await click(0,pages[0].getByRole('button',{name:'准备下一关',exact:true}));await click(1,pages[1].getByRole('button',{name:'一起进入下一关',exact:true}));}
    }
    for(const p of pages)await expect(p.getByRole('heading',{name:'整片星空，因你们亮起！',exact:true})).toBeVisible();
   }else{

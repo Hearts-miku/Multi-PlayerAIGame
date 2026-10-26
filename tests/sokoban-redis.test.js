@@ -59,11 +59,13 @@ test('Redis puzzle: authenticated cross-instance moves, atomic races and restart
     assert.deepEqual((await replacement.games.get(id)).sokoban.latches,[]);
     await assert.rejects(()=>replacement.games.sokobanAction(users[0].id,{...command,revision:2},[users[0].id]),/上线/);
     await replacement.games.leave(users[0].id);
-    const selected=await replacement.games.create(users[0],{game:'sokoban',mode:'coop',startLevel:7});
-    await replacement.close();replacement=redisBackend(process.env.REDIS_URL,prefix);await replacement.ready;
-    const joined=await replacement.games.join(users[1],selected.id);
-    assert.equal(joined.sokoban.level,7);assert.deepEqual(joined.sokoban.circuits,newSokoban(7).circuits);
-    await replacement.games.leave(users[0].id);
+    for(const startLevel of [7,10]) {
+      const selected=await replacement.games.create(users[0],{game:'sokoban',mode:'coop',startLevel});
+      await replacement.close();replacement=redisBackend(process.env.REDIS_URL,prefix);await replacement.ready;
+      const joined=await replacement.games.join(users[1],selected.id);
+      assert.equal(joined.sokoban.level,startLevel);assert.deepEqual(joined.sokoban.circuits,newSokoban(startLevel).circuits);
+      await replacement.games.leave(users[0].id);
+    }
   } finally {
     sockets.forEach((socket) => socket.disconnect());
     for (const app of apps) if (app.httpServer.listening) await app.close();

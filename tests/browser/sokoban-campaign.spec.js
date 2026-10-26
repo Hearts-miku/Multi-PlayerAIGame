@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { campaignSolution } from '../helpers/sokoban-solution.js';
 
-test('eight-level campaign: two browsers solve every cooperative circuit and finish together', async ({browser},info) => {
+test('eleven-level campaign: two browsers solve every cooperative circuit and finish together', async ({browser},info) => {
   test.setTimeout(process.env.LIVE_BASE_URL ? 600_000 : 300_000);
   const contexts=[await browser.newContext({viewport:{width:1440,height:1100}}),await browser.newContext({viewport:{width:390,height:844},isMobile:true})];
   const pages=await Promise.all(contexts.map(c=>c.newPage())),errors=[];

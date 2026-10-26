@@ -6,16 +6,16 @@ import { LIGHT_LEVELS, switchOwner, toggleLights } from '../shared/lights.js';
 import { gravityLines } from '../server/gravity.js';
 const user=id=>({id,displayName:`p${id}`});
 function setup(game){const games=new Games(),room=games.create(user(1),{game,mode:game==='lights'?'coop':'versus'});games.join(user(2),room.id);const act=(id,command)=>games[`${game}Action`](id,{round:room[game].round,revision:room[game].revision,...command},[1,2]);return{games,room,act};}
-test('lights: three legal cooperative solutions, ownership, linked cells, consent and replay',()=>{
+test('lights: all cooperative solutions, ownership, linked cells, consent and replay',()=>{
  const {games,room,act}=setup('lights');
  const before=structuredClone(room);assert.throws(()=>act(2,{kind:'toggle',index:0}),/队友/);assert.deepEqual(room,before);
  assert.throws(()=>act(1,{kind:'toggle',index:NaN}),/无效/);
  const cells=Array(9).fill(false);assert.deepEqual(toggleLights(cells,3,0),[true,true,false,true,false,false,false,false,false]);assert.deepEqual(toggleLights(toggleLights(cells,3,0),3,0),cells);
  act(1,{kind:'restart'});assert.equal(room.lights.round,0);act(2,{kind:'restart'});assert.equal(room.lights.round,1);
- for(let level=0;level<3;level++){
+ for(let level=0;level<LIGHT_LEVELS.length;level++){
   for(const index of LIGHT_LEVELS[level].scramble)act(switchOwner(index,room.lights.size)+1,{kind:'toggle',index});
   assert.equal(room.lights.phase,'cleared');assert.ok(room.lights.cells.every(Boolean));
-  if(level<2){act(1,{kind:'next'});assert.equal(room.lights.level,level);act(2,{kind:'next'});assert.equal(room.lights.level,level+1);}
+  if(level<LIGHT_LEVELS.length-1){act(1,{kind:'next'});assert.equal(room.lights.level,level);act(2,{kind:'next'});assert.equal(room.lights.level,level+1);}
  }
  assert.equal(room.status,'finished');assert.equal(room.reason,'lights-complete');games.rematch(1);games.rematch(2);assert.equal(room.lights.level,0);assert.equal(room.status,'playing');
 });
@@ -70,4 +70,22 @@ test('every lights level needs switches from both players, not a solo solution',
    }
   }
  }
+});
+
+test('lights difficulty increases by minimum presses; old three-level snapshots still finish',()=>{
+ const minimum=[];
+ for(let level=0;level<LIGHT_LEVELS.length;level++){
+  const s=newLights(level),target=s.cells.reduce((m,on,i)=>on?m:m^(1<<i),0);
+  const sides=[0,1].map(owner=>s.cells.map((_,i)=>i).filter(i=>switchOwner(i,s.size)===owner).map(i=>toggleLights(Array(s.cells.length).fill(false),s.size,i).reduce((m,on,j)=>on?m^(1<<j):m,0)));
+  const maps=sides.map(masks=>{const result=new Map();for(let subset=0;subset<1<<masks.length;subset++){let effect=0,count=0;for(let i=0;i<masks.length;i++)if(subset&(1<<i)){effect^=masks[i];count++;}result.set(effect,Math.min(result.get(effect)??Infinity,count));}return result;});
+  let best=Infinity;for(const [effect,count]of maps[0])best=Math.min(best,count+(maps[1].get(target^effect)??Infinity));minimum.push(best);
+ }
+ assert.deepEqual(minimum,[2,4,6,8,10,12]);
+ const {games,room,act}=setup('lights');delete room.lights.totalLevels;
+ act(1,{kind:'restart'});act(2,{kind:'restart'});assert.equal(room.lights.totalLevels,3);
+ for(let level=0;level<3;level++){
+  for(const index of LIGHT_LEVELS[level].scramble)act(switchOwner(index,room.lights.size)+1,{kind:'toggle',index});
+  if(level<2){act(1,{kind:'next'});act(2,{kind:'next'});}
+ }
+ assert.equal(room.status,'finished');games.rematch(1);games.rematch(2);assert.equal(room.lights.totalLevels,6);
 });
