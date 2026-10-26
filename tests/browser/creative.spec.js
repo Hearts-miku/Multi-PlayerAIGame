@@ -33,8 +33,12 @@ for(const game of ['lights','gravity'])test(`${game}: two players create, play, 
   if(game==='lights'){
    await click(0,pages[0].getByRole('button',{name:'申请重开本关',exact:true}));await click(1,pages[1].getByRole('button',{name:'同意重开本关',exact:true}));
    for(let level=0;level<LIGHT_LEVELS.length;level++){
+    for(const p of pages){
+     await expect(p.locator('.table-heading small')).toHaveText(`第 ${level+1} / ${LIGHT_LEVELS.length} 关`);
+     await expect(p.getByRole('heading',{name:LIGHT_LEVELS[level].name,exact:true})).toBeVisible();
+    }
     for(const index of LIGHT_LEVELS[level].scramble){const player=switchOwner(index,LIGHT_LEVELS[level].size);await click(player,pages[player].getByTestId(`light-${index}`));}
-    for(const p of pages)await expect(p.getByTestId('lights-board')).toHaveAttribute('data-phase','cleared');
+    for(const p of pages){await expect(p.getByTestId('lights-board')).toHaveAttribute('data-phase','cleared');await expect(p.locator('.lights-cell[data-lit="true"]')).toHaveCount(LIGHT_LEVELS[level].size**2);}
     if(level<LIGHT_LEVELS.length-1){await click(0,pages[0].getByRole('button',{name:'准备下一关',exact:true}));await click(1,pages[1].getByRole('button',{name:'一起进入下一关',exact:true}));}
    }
    for(const p of pages)await expect(p.getByRole('heading',{name:'整片星空，因你们亮起！',exact:true})).toBeVisible();

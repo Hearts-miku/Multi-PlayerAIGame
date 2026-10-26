@@ -80,12 +80,24 @@ test('lights difficulty increases by minimum presses; old three-level snapshots 
   const maps=sides.map(masks=>{const result=new Map();for(let subset=0;subset<1<<masks.length;subset++){let effect=0,count=0;for(let i=0;i<masks.length;i++)if(subset&(1<<i)){effect^=masks[i];count++;}result.set(effect,Math.min(result.get(effect)??Infinity,count));}return result;});
   let best=Infinity;for(const [effect,count]of maps[0])best=Math.min(best,count+(maps[1].get(target^effect)??Infinity));minimum.push(best);
  }
- assert.deepEqual(minimum,[2,4,6,8,10,12]);
+ assert.deepEqual(minimum,[2,4,6,8,10,12,13,13,14,14,15,15]);
  const {games,room,act}=setup('lights');delete room.lights.totalLevels;
  act(1,{kind:'restart'});act(2,{kind:'restart'});assert.equal(room.lights.totalLevels,3);
  for(let level=0;level<3;level++){
   for(const index of LIGHT_LEVELS[level].scramble)act(switchOwner(index,room.lights.size)+1,{kind:'toggle',index});
   if(level<2){act(1,{kind:'next'});act(2,{kind:'next'});}
  }
- assert.equal(room.status,'finished');games.rematch(1);games.rematch(2);assert.equal(room.lights.totalLevels,6);
+ assert.equal(room.status,'finished');games.rematch(1);games.rematch(2);assert.equal(room.lights.totalLevels,12);
+});
+
+test('lights: existing six-level rooms retain their endpoint through restart and progression',()=>{
+ const {games,room,act}=setup('lights');room.lights.totalLevels=6;
+ act(1,{kind:'restart'});act(2,{kind:'restart'});assert.equal(room.lights.totalLevels,6);
+ for(let level=0;level<6;level++){
+  assert.equal(room.lights.totalLevels,6);
+  for(const index of LIGHT_LEVELS[level].scramble)act(switchOwner(index,room.lights.size)+1,{kind:'toggle',index});
+  if(level<5){assert.equal(room.status,'playing');act(1,{kind:'next'});act(2,{kind:'next'});}
+ }
+ assert.equal(room.status,'finished');assert.equal(room.lights.level,5);
+ games.rematch(1);games.rematch(2);assert.equal(room.lights.totalLevels,12);assert.equal(room.lights.level,0);
 });
