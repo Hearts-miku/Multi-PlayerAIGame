@@ -68,6 +68,13 @@ for (const mode of ['versus', 'coop']) test(`snake ${mode}: desktop + mobile con
       await expect(b.getByTestId('snake-board')).toHaveAttribute('data-phase', 'running');
     }
     // Keyboard and mobile controls must change actual authoritative positions.
+    // Player B's ready click leaves A in a background tab. Activate A and
+    // focus its enabled control before sending a real keyboard event.
+    await a.bringToFront();
+    const desktopUp = a.getByRole('button', { name: '向上', exact: true });
+    await expect(desktopUp).toBeEnabled();
+    await desktopUp.focus();
+    await expect(desktopUp).toBeFocused();
     await a.keyboard.press('ArrowUp'); await b.getByRole('button', { name: '向上', exact: true }).click();
     await expect.poll(async () => Number(await a.getByTestId('snake-head-0').getAttribute('data-y')), { timeout: 15_000 }).toBeLessThan(6);
     await expect.poll(async () => Number(await b.getByTestId('snake-head-1').getAttribute('data-y'))).toBeLessThan(17);
