@@ -1,4 +1,5 @@
 import { newLights, lightsAction } from './lights.js';
+import { newMaze, freshMaze, mazeAction } from './maze.js';
 import { newGravity, gravityAction } from './gravity.js';
 import { newSokoban, createSokoban, sokobanAction } from './sokoban.js';
 import { GAME_CATALOG } from '../shared/games.js';
@@ -21,6 +22,7 @@ const resign = (room, userId) => {
   room.reason = 'resign';
 };
 export const GAME_RULES = extendRules({}, {
+  maze: { modes: ['coop'], initial: () => ({ maze: newMaze() }), reset: (room) => { room.maze=freshMaze(room.maze); }, resign: (room) => { room.winner=null;room.reason='team-abandon'; }, action: mazeAction },
   lights: { modes: ['coop'], initial: () => ({ lights: newLights() }), reset: (room) => { room.lights=newLights(0,room.lights.round+1,room.lights.revision+1); }, resign: (room) => { room.winner=null;room.reason='team-abandon'; }, action: lightsAction },
   gravity: { modes: ['versus'], initial: () => ({ gravity: newGravity() }), reset: (room) => { room.gravity=newGravity(room.gravity.round+1,room.gravity.revision+1); }, resign, action: gravityAction },
   gomoku: { modes: Object.keys(GAME_CATALOG.gomoku.modes), initial: newGomoku, reset: resetGomoku, resign, move: moveGomoku },
