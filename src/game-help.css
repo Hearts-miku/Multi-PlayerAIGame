@@ -1,0 +1,6 @@
+.game-help { margin: 0 0 16px; }
+.game-help > button { display: flex; gap: 16px; align-items: center; }
+.game-help-content { margin-top: 10px; padding: 16px 20px; border: 1px solid #d9e2d9; border-radius: 14px; background: #f5f8f0; color: #253c35; }
+.game-help-content h3 { margin: 0 0 10px; font-size: 16px; }
+.game-help-content ul { margin: 0; padding-left: 20px; line-height: 1.8; }
+.game-help-content p { margin: 10px 0 0; font-size: 12px; color: #596c60; }
